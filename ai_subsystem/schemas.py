@@ -329,8 +329,190 @@ class AttendanceDiscrepancyEvent(BaseModel):
     discrepancy_percentage: float
     tolerance_percentage: float
     explanation: str
-    config_version: str = "cfg-2026.4"
+    config_version: str = "cfg-2026.1"
     model_version: str = "v1.0.0"
+
+
+# =====================================================================
+# Phase 5: Anomaly Detection, Incident Correlation, Alerts & Evidence
+# =====================================================================
+
+class AnomalySeverity(str, Enum):
+    LOW = "LOW"
+    MEDIUM = "MEDIUM"
+    HIGH = "HIGH"
+    CRITICAL = "CRITICAL"
+
+
+class AnomalyType(str, Enum):
+    RESTRICTED_ZONE_BREACH = "RESTRICTED_ZONE_BREACH"
+    LOITERING_DETECTED = "LOITERING_DETECTED"
+    AFTER_HOURS_ACTIVITY = "AFTER_HOURS_ACTIVITY"
+    CROWD_SURGE = "CROWD_SURGE"
+    ATTENDANCE_DISCREPANCY = "ATTENDANCE_DISCREPANCY"
+    VISUAL_STREAM_ANOMALY = "VISUAL_STREAM_ANOMALY"
+    REPEATED_OCCURRENCE = "REPEATED_OCCURRENCE"
+
+
+class AIAnomaly(BaseModel):
+    """
+    Normalized explainable anomaly representation consumed from visual/spatial/temporal/attendance signals.
+    Employs strictly neutral decision-support terminology.
+    """
+    anomaly_id: str
+    camera_id: str
+    institution_id: Optional[str] = None
+    zone_id: Optional[str] = None
+    zone_name: Optional[str] = None
+    timestamp_utc: float
+    anomaly_type: AnomalyType
+    severity: AnomalySeverity
+    confidence_score: float = Field(default=0.85, ge=0.0, le=1.0)
+    contributing_event_ids: list[str] = Field(default_factory=list)
+    explanation: str
+    config_version: str = "cfg-2026.1"
+    model_version: str = "v1.0.0"
+
+
+class IncidentType(str, Enum):
+    CORRELATED_SECURITY_INCURSION = "CORRELATED_SECURITY_INCURSION"
+    OPERATIONAL_ATTENDANCE_ANOMALY = "OPERATIONAL_ATTENDANCE_ANOMALY"
+    CROWD_SAFETY_CONCERN = "CROWD_SAFETY_CONCERN"
+    CAMERA_INTEGRITY_COMPROMISE = "CAMERA_INTEGRITY_COMPROMISE"
+    UNUSUAL_ACTIVITY_PATTERN = "UNUSUAL_ACTIVITY_PATTERN"
+
+
+class IncidentSeverity(str, Enum):
+    LOW = "LOW"
+    MEDIUM = "MEDIUM"
+    HIGH = "HIGH"
+    CRITICAL = "CRITICAL"
+
+
+class IncidentStatus(str, Enum):
+    ACTIVE = "ACTIVE"
+    CONTAINED = "CONTAINED"
+    RESOLVED = "RESOLVED"
+
+
+class AIIncident(BaseModel):
+    """
+    Correlated multi-signal operational incident grouping related anomalies within a temporal window.
+    """
+    incident_id: str
+    camera_id: str
+    institution_id: Optional[str] = None
+    zone_id: Optional[str] = None
+    zone_name: Optional[str] = None
+    incident_type: IncidentType
+    severity: IncidentSeverity
+    status: IncidentStatus = IncidentStatus.ACTIVE
+    start_time_utc: float
+    last_updated_utc: float
+    contributing_anomaly_ids: list[str] = Field(default_factory=list)
+    contributing_event_ids: list[str] = Field(default_factory=list)
+    signals_count: int = 1
+    explanation: str
+    recommended_action: str
+    config_version: str = "cfg-2026.1"
+    model_version: str = "v1.0.0"
+
+
+class AlertSeverity(str, Enum):
+    INFO = "INFO"
+    WARNING = "WARNING"
+    CRITICAL = "CRITICAL"
+
+
+class AlertLifecycleState(str, Enum):
+    NEW = "NEW"
+    ACKNOWLEDGED = "ACKNOWLEDGED"
+    RESOLVED = "RESOLVED"
+    DISMISSED = "DISMISSED"
+
+
+class AIAlert(BaseModel):
+    """
+    High-priority actionable AI alert generated for authorized inspection and monitoring personnel.
+    """
+    alert_id: str
+    incident_id: Optional[str] = None
+    anomaly_id: Optional[str] = None
+    camera_id: str
+    institution_id: Optional[str] = None
+    zone_id: Optional[str] = None
+    alert_type: str
+    severity: AlertSeverity
+    lifecycle_state: AlertLifecycleState = AlertLifecycleState.NEW
+    created_at_utc: float
+    acknowledged_at_utc: Optional[float] = None
+    resolved_at_utc: Optional[float] = None
+    acknowledged_by: Optional[str] = None
+    resolution_notes: Optional[str] = None
+    title: str
+    explanation: str
+    recommended_action: str
+    contributing_signal_ids: list[str] = Field(default_factory=list)
+    evidence_snapshot_id: Optional[str] = None
+    metadata: dict = Field(default_factory=dict)
+    config_version: str = "cfg-2026.1"
+    model_version: str = "v1.0.0"
+
+
+class EvidenceRecord(BaseModel):
+    """
+    Cryptographically sealed visual frame snapshot with metadata and SHA-256 digest.
+    Provides verifiable image integrity against post-creation tampering.
+    """
+    evidence_id: str
+    camera_id: str
+    institution_id: Optional[str] = None
+    timestamp_utc: float
+    source_event_id: str
+    incident_id: Optional[str] = None
+    zone_id: Optional[str] = None
+    image_path: str
+    file_size_bytes: int
+    hash_algorithm: str = "SHA-256"
+    sha256_hash: str
+    event_type: str
+    explanation: str
+    config_version: str = "cfg-2026.1"
+    model_version: str = "v1.0.0"
+
+
+class EvidenceVerificationResult(BaseModel):
+    """
+    Verification outcome evaluating whether an on-disk evidence image matches its recorded SHA-256 digest.
+    """
+    evidence_id: str
+    is_valid: bool
+    recorded_hash: str
+    computed_hash: str
+    explanation: str
+    verified_at_utc: float
+
+
+class ReviewOutcome(str, Enum):
+    TRUE_EVENT = "TRUE_EVENT"
+    FALSE_POSITIVE = "FALSE_POSITIVE"
+    INCONCLUSIVE = "INCONCLUSIVE"
+
+
+class HumanReviewRecord(BaseModel):
+    """
+    Structured human supervisor review record for auditing, false-positive tracking,
+    and downstream rule/model feedback.
+    """
+    review_id: str
+    target_id: str  # alert_id or incident_id
+    reviewer_id: str
+    outcome: ReviewOutcome
+    notes: str
+    reviewed_at_utc: float
+    model_version: str = "v1.0.0"
+    config_version: str = "cfg-2026.1"
+
 
 
 

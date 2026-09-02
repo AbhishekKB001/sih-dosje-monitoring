@@ -51,18 +51,47 @@ This subsystem represents **Member 4's core contribution** to the SIH26095 DoSJE
   * Discrepancy metric: Absolute count difference and percentage variance against configured tolerance thresholds.
   * Emitted Events: `ATTENDANCE_OCCUPANCY_DISCREPANCY`.
 
-### 5. Concurrency & Multi-Camera Pool (`ai_subsystem/manager/`)
+### 5. Anomaly Detection & Decision Support (`ai_subsystem/analytics/anomaly.py`)
+* **`AnomalyEngine`**:
+  * Consumes structured signals already produced by upstream visual health, spatial, temporal, occupancy, and attendance engines without repeating YOLO inferences.
+  * Normalizes events into `AIAnomaly` models (`RESTRICTED_ZONE_BREACH`, `LOITERING_DETECTED`, `AFTER_HOURS_ACTIVITY`, `CROWD_SURGE`, `ATTENDANCE_DISCREPANCY`, `VISUAL_STREAM_ANOMALY`).
+  * Enforces per-target cooldown throttling to prevent notification flooding.
+  * Adheres strictly to decision-support terminology (no accusations of fraud or crime).
+
+### 6. Multi-Signal Incident Correlation (`ai_subsystem/analytics/incident.py`)
+* **`IncidentCorrelationEngine`**:
+  * Temporal sliding-window correlation engine (`correlation_window_sec`, e.g. 30s–60s).
+  * Fuses related anomalies into unified high-severity `AIIncident` objects:
+    * **Correlated Security Incursion**: Restricted zone breach + loitering / after-hours activity.
+    * **Operational Attendance Anomaly**: Attendance discrepancy + crowd surge / repeated variance.
+    * **Crowd Safety Concern**: Sustained multi-frame capacity breaches in a single zone.
+  * Maintains incident lifecycle (`ACTIVE` $\rightarrow$ `CONTAINED` $\rightarrow$ `RESOLVED`).
+
+### 7. AI Alert Manager & Supervisor Lifecycle (`ai_subsystem/analytics/alerts.py`)
+* **`AIAlertManager`**:
+  * Translates elevated incidents and critical anomalies into actionable `AIAlert` objects.
+  * Maintains full supervisor lifecycle states: `NEW` $\rightarrow$ `ACKNOWLEDGED` $\rightarrow$ `RESOLVED` (or `DISMISSED`).
+  * Employs configurable cooldown suppression per camera and alert signature.
+
+### 8. Evidence Snapshot, Cryptographic Sealing & Human Review (`ai_subsystem/analytics/evidence.py`)
+* **`EvidenceManager`**:
+  * **Visual Snapshot**: Exports visual frame from the stream when significant events occur.
+  * **Cryptographic Sealing**: Computes genuine SHA-256 digest over the binary image file upon capture.
+  * **Integrity Verification**: `verify_evidence_integrity()` recalculates file digest from disk to detect any post-creation tampering or corruption.
+  * **Human Supervisor Review**: Records structured audit decisions (`ReviewOutcome.TRUE_EVENT`, `FALSE_POSITIVE`, `INCONCLUSIVE`) with auditor notes and tracks cumulative false-positive rates for continuous rule tuning.
+
+### 9. Concurrency & Multi-Camera Pool (`ai_subsystem/manager/`)
 * **`CameraWorker`**: Isolated thread per camera. Decoupled asynchronous producer-consumer pipeline preventing video ingestion backpressure.
 * **`SourceManager`**: Multi-camera lifecycle and fault-isolation coordinator.
 
-### 6. Pipeline Orchestrator (`ai_subsystem/orchestrator.py`)
-* **`AIPipelineOrchestrator`**: Master integration coordinator: Ingestion $\rightarrow$ Visual Health $\rightarrow$ YOLO Detection $\rightarrow$ ByteTrack Tracking $\rightarrow$ Spatial Polygon Zones $\rightarrow$ Line Crossing $\rightarrow$ Temporal Analytics $\rightarrow$ Occupancy & Crowd $\rightarrow$ Attendance Consistency $\rightarrow$ Telemetry.
+### 10. Pipeline Orchestrator (`ai_subsystem/orchestrator.py`)
+* **`AIPipelineOrchestrator`**: Master integration coordinator: Ingestion $\rightarrow$ Visual Health $\rightarrow$ YOLO Detection $\rightarrow$ ByteTrack Tracking $\rightarrow$ Spatial Polygon Zones $\rightarrow$ Line Crossing $\rightarrow$ Temporal Analytics $\rightarrow$ Occupancy & Crowd $\rightarrow$ Attendance Consistency $\rightarrow$ Anomaly Detection $\rightarrow$ Incident Correlation $\rightarrow$ AI Alerts $\rightarrow$ Cryptographically Sealed Evidence Snapshots.
 
 ---
 
 ## Running Tests & Standalone Demos
 
-### 1. Run All Automated Tests (53 Tests Passing)
+### 1. Run All Automated Tests (71 Tests Passing)
 ```bash
 .\venv\Scripts\pytest -v
 ```
@@ -87,5 +116,12 @@ This subsystem represents **Member 4's core contribution** to the SIH26095 DoSJE
 .\venv\Scripts\python run_phase4_demo.py
 ```
 *(Saves annotated detection snapshot to `data/demo_phase4_annotated.jpg`)*
+
+### 6. Run Standalone Phase 5 Demo (Anomalies, Incidents, Alerts & SHA-256 Sealed Evidence)
+```bash
+.\venv\Scripts\python run_phase5_demo.py
+```
+*(Captures sealed evidence snapshot under `data/evidence/` with SHA-256 verification and human review)*
+
 
 

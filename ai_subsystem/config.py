@@ -144,6 +144,52 @@ class AttendanceConsistencyConfig(BaseModel):
     )
 
 
+class AnomalyConfig(BaseModel):
+    """Configuration for decision-support anomaly detection."""
+    enabled: bool = Field(default=True, description="Enable anomaly detection engine")
+    cooldown_sec: float = Field(default=10.0, ge=0.5, description="Cooldown between identical anomaly types per target")
+    min_confidence_score: float = Field(default=0.70, ge=0.0, le=1.0, description="Minimum confidence for anomaly generation")
+
+
+class IncidentCorrelationConfig(BaseModel):
+    """Configuration for temporal multi-signal incident correlation."""
+    enabled: bool = Field(default=True, description="Enable multi-signal incident correlation")
+    correlation_window_sec: float = Field(
+        default=60.0, ge=5.0, description="Temporal window to correlate related anomaly signals"
+    )
+    incident_cooldown_sec: float = Field(
+        default=30.0, ge=1.0, description="Cooldown between reporting duplicate or continued incidents"
+    )
+    min_signals_to_escalate: int = Field(
+        default=2, ge=2, description="Minimum distinct signals required to form an elevated multi-signal incident"
+    )
+
+
+class AlertManagerConfig(BaseModel):
+    """Configuration for AI Alert Manager and notification lifecycle."""
+    enabled: bool = Field(default=True, description="Enable AI alert manager")
+    alert_cooldown_sec: float = Field(
+        default=30.0, ge=1.0, description="Minimum seconds between alerts for the same category/target"
+    )
+    auto_resolve_after_sec: float = Field(
+        default=3600.0, ge=60.0, description="Auto-resolve stale unresolved alerts after duration"
+    )
+
+
+class EvidenceConfig(BaseModel):
+    """Configuration for evidence snapshot generation and SHA-256 integrity sealing."""
+    enabled: bool = Field(default=True, description="Enable visual evidence snapshot generation")
+    storage_dir: str = Field(
+        default="data/evidence", description="Filesystem directory for storing evidence snapshots"
+    )
+    jpeg_quality: int = Field(
+        default=92, ge=50, le=100, description="JPEG compression quality for evidence captures"
+    )
+    save_annotated_frame: bool = Field(
+        default=True, description="Save annotated visual context with bounding boxes/zones"
+    )
+
+
 class SingleCameraConfig(BaseModel):
     """Configuration for an individual camera stream source."""
     camera_id: str = Field(..., description="Unique camera identifier, e.g. CAM-001")
@@ -159,6 +205,10 @@ class SingleCameraConfig(BaseModel):
     schedule_id: Optional[str] = Field(default=None, description="Optional operational schedule ID for after-hours checks")
     occupancy: OccupancyConfig = Field(default_factory=OccupancyConfig, description="Occupancy and crowd thresholds")
     attendance: AttendanceConsistencyConfig = Field(default_factory=AttendanceConsistencyConfig, description="Attendance comparison config")
+    anomaly: AnomalyConfig = Field(default_factory=AnomalyConfig, description="Anomaly detection thresholds")
+    incident: IncidentCorrelationConfig = Field(default_factory=IncidentCorrelationConfig, description="Incident correlation settings")
+    alert: AlertManagerConfig = Field(default_factory=AlertManagerConfig, description="Alert manager settings")
+    evidence: EvidenceConfig = Field(default_factory=EvidenceConfig, description="Evidence capture and sealing settings")
 
 
 class AIConfig(BaseModel):
@@ -174,6 +224,10 @@ class AIConfig(BaseModel):
     temporal: TemporalConfig = Field(default_factory=TemporalConfig)
     occupancy: OccupancyConfig = Field(default_factory=OccupancyConfig)
     attendance: AttendanceConsistencyConfig = Field(default_factory=AttendanceConsistencyConfig)
+    anomaly: AnomalyConfig = Field(default_factory=AnomalyConfig)
+    incident: IncidentCorrelationConfig = Field(default_factory=IncidentCorrelationConfig)
+    alert: AlertManagerConfig = Field(default_factory=AlertManagerConfig)
+    evidence: EvidenceConfig = Field(default_factory=EvidenceConfig)
     
     cameras: Dict[str, SingleCameraConfig] = Field(
         default_factory=dict,

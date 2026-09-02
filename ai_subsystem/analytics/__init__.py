@@ -13,6 +13,10 @@ from ai_subsystem.analytics.schedule import ScheduleEvaluator, is_timestamp_in_w
 from ai_subsystem.analytics.temporal import TemporalEngine
 from ai_subsystem.analytics.occupancy import OccupancyAnalyzer, CrowdAnalyticsEngine
 from ai_subsystem.analytics.attendance import AttendanceConsistencyEngine
+from ai_subsystem.analytics.anomaly import AnomalyEngine
+from ai_subsystem.analytics.incident import IncidentCorrelationEngine
+from ai_subsystem.analytics.alerts import AIAlertManager
+from ai_subsystem.analytics.evidence import EvidenceManager
 
 __all__ = [
     "PolygonZoneEngine",
@@ -26,5 +30,9 @@ __all__ = [
     "OccupancyAnalyzer",
     "CrowdAnalyticsEngine",
     "AttendanceConsistencyEngine",
+    "AnomalyEngine",
+    "IncidentCorrelationEngine",
+    "AIAlertManager",
+    "EvidenceManager",
 ]
 

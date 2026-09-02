@@ -10,24 +10,36 @@ from ai_subsystem.analytics.spatial import LineCrossingEngine, PolygonZoneEngine
 from ai_subsystem.analytics.temporal import TemporalEngine
 from ai_subsystem.analytics.occupancy import OccupancyAnalyzer, CrowdAnalyticsEngine
 from ai_subsystem.analytics.attendance import AttendanceConsistencyEngine
-from ai_subsystem.config import AIConfig, SingleCameraConfig
+from ai_subsystem.analytics.anomaly import AnomalyEngine
+from ai_subsystem.analytics.incident import IncidentCorrelationEngine
+from ai_subsystem.analytics.alerts import AIAlertManager
+from ai_subsystem.analytics.evidence import EvidenceManager
+from ai_subsystem.config import (
+    AIConfig,
+    SingleCameraConfig,
+    SourceType,
+    SpatialConfig,
+)
 from ai_subsystem.manager.source_manager import SourceManager
 from ai_subsystem.observability.metrics import MetricsCollector
 from ai_subsystem.schemas import (
+    AIAlert,
+    AIAnomaly,
+    AIIncident,
     AfterHoursEvent,
     AttendanceDiscrepancyEvent,
     CrowdThresholdEvent,
     Detection,
+    EvidenceRecord,
     FramePayload,
-    LineCrossingEvent,
     LoiteringEvent,
-    OccupancySnapshot,
     ReportedAttendance,
     StreamEvent,
     Track,
     TrackState,
     VisualHealthResult,
     VisualHealthState,
+    LineCrossingEvent,
     ZoneTransition,
 )
 from ai_subsystem.utils.logger import logger
@@ -41,7 +53,8 @@ class AIPipelineOrchestrator:
     Master pipeline coordinator.
     Routes frames through: Ingestion -> Visual Health -> YOLOv8 Detection -> ByteTrack Tracking
     -> Spatial Polygon & Line Analytics -> Temporal Loitering & After-Hours Intelligence
-    -> Occupancy & Crowd Analytics -> Non-Biometric Attendance Consistency Evaluation.
+    -> Occupancy & Crowd Analytics -> Non-Biometric Attendance Consistency Evaluation
+    -> Anomaly Detection -> Multi-Signal Incident Correlation -> AI Alerts -> Sealed Evidence Snapshots.
     """
 
     def __init__(
@@ -72,6 +85,10 @@ class AIPipelineOrchestrator:
         self._occupancy_analyzers: Dict[str, OccupancyAnalyzer] = {}
         self._crowd_engines: Dict[str, CrowdAnalyticsEngine] = {}
         self._attendance_engines: Dict[str, AttendanceConsistencyEngine] = {}
+        self._anomaly_engines: Dict[str, AnomalyEngine] = {}
+        self._incident_engines: Dict[str, IncidentCorrelationEngine] = {}
+        self._alert_managers: Dict[str, AIAlertManager] = {}
+        self._evidence_managers: Dict[str, EvidenceManager] = {}
 
         # Initialize multi-camera source manager
         self.source_manager = SourceManager(
@@ -91,11 +108,11 @@ class AIPipelineOrchestrator:
         self.source_manager.add_camera(camera_cfg)
         cid = camera_cfg.camera_id
 
-        if cid not in self._trackers:
-            self._trackers[cid] = MultiObjectTracker(
-                camera_id=cid,
-                config=self.config.tracker
-            )
+        # Initialize Tracker
+        self._trackers[cid] = MultiObjectTracker(
+            camera_id=cid,
+            config=self.config.tracker
+        )
 
         # Initialize Spatial & Temporal Engines
         self._zone_engines[cid] = PolygonZoneEngine(camera_id=cid, config=camera_cfg.spatial)
@@ -121,6 +138,36 @@ class AIPipelineOrchestrator:
         self._attendance_engines[cid] = AttendanceConsistencyEngine(
             camera_id=cid,
             config=camera_cfg.attendance,
+            config_version=self.config.config_version,
+            model_version=self.config.model_version
+        )
+
+        # Initialize Phase 5 Anomaly, Incident, Alert & Evidence Engines
+        self._anomaly_engines[cid] = AnomalyEngine(
+            camera_id=cid,
+            institution_id=camera_cfg.institution_id,
+            config=camera_cfg.anomaly,
+            config_version=self.config.config_version,
+            model_version=self.config.model_version
+        )
+        self._incident_engines[cid] = IncidentCorrelationEngine(
+            camera_id=cid,
+            institution_id=camera_cfg.institution_id,
+            config=camera_cfg.incident,
+            config_version=self.config.config_version,
+            model_version=self.config.model_version
+        )
+        self._alert_managers[cid] = AIAlertManager(
+            camera_id=cid,
+            institution_id=camera_cfg.institution_id,
+            config=camera_cfg.alert,
+            config_version=self.config.config_version,
+            model_version=self.config.model_version
+        )
+        self._evidence_managers[cid] = EvidenceManager(
+            camera_id=cid,
+            institution_id=camera_cfg.institution_id,
+            config=camera_cfg.evidence,
             config_version=self.config.config_version,
             model_version=self.config.model_version
         )
@@ -195,6 +242,66 @@ class AIPipelineOrchestrator:
                 engine = self.get_attendance_engine(cid)
                 engine.register_reported_attendance(record)
 
+    def get_anomaly_engine(self, camera_id: str) -> AnomalyEngine:
+        """Retrieves or creates the isolated anomaly engine for a specific camera."""
+        if camera_id not in self._anomaly_engines:
+            cam_cfg = self.config.get_camera(camera_id)
+            anom_cfg = cam_cfg.anomaly if cam_cfg else self.config.anomaly
+            inst_id = cam_cfg.institution_id if cam_cfg else None
+            self._anomaly_engines[camera_id] = AnomalyEngine(
+                camera_id=camera_id,
+                institution_id=inst_id,
+                config=anom_cfg,
+                config_version=self.config.config_version,
+                model_version=self.config.model_version
+            )
+        return self._anomaly_engines[camera_id]
+
+    def get_incident_engine(self, camera_id: str) -> IncidentCorrelationEngine:
+        """Retrieves or creates the isolated incident correlation engine for a specific camera."""
+        if camera_id not in self._incident_engines:
+            cam_cfg = self.config.get_camera(camera_id)
+            inc_cfg = cam_cfg.incident if cam_cfg else self.config.incident
+            inst_id = cam_cfg.institution_id if cam_cfg else None
+            self._incident_engines[camera_id] = IncidentCorrelationEngine(
+                camera_id=camera_id,
+                institution_id=inst_id,
+                config=inc_cfg,
+                config_version=self.config.config_version,
+                model_version=self.config.model_version
+            )
+        return self._incident_engines[camera_id]
+
+    def get_alert_manager(self, camera_id: str) -> AIAlertManager:
+        """Retrieves or creates the isolated alert manager for a specific camera."""
+        if camera_id not in self._alert_managers:
+            cam_cfg = self.config.get_camera(camera_id)
+            alt_cfg = cam_cfg.alert if cam_cfg else self.config.alert
+            inst_id = cam_cfg.institution_id if cam_cfg else None
+            self._alert_managers[camera_id] = AIAlertManager(
+                camera_id=camera_id,
+                institution_id=inst_id,
+                config=alt_cfg,
+                config_version=self.config.config_version,
+                model_version=self.config.model_version
+            )
+        return self._alert_managers[camera_id]
+
+    def get_evidence_manager(self, camera_id: str) -> EvidenceManager:
+        """Retrieves or creates the isolated evidence manager for a specific camera."""
+        if camera_id not in self._evidence_managers:
+            cam_cfg = self.config.get_camera(camera_id)
+            evd_cfg = cam_cfg.evidence if cam_cfg else self.config.evidence
+            inst_id = cam_cfg.institution_id if cam_cfg else None
+            self._evidence_managers[camera_id] = EvidenceManager(
+                camera_id=camera_id,
+                institution_id=inst_id,
+                config=evd_cfg,
+                config_version=self.config.config_version,
+                model_version=self.config.model_version
+            )
+        return self._evidence_managers[camera_id]
+
     def start(self) -> None:
         """Starts stream ingestion across all configured cameras."""
         logger.info("Starting AIPipelineOrchestrator...")
@@ -238,7 +345,11 @@ class AIPipelineOrchestrator:
                 "occupancy": None,
                 "zone_occupancy": [],
                 "crowd_events": [],
-                "attendance_events": []
+                "attendance_events": [],
+                "anomalies": [],
+                "incidents": [],
+                "alerts": [],
+                "evidence": []
             }
 
         # 3. Object Detection (YOLOv8)
@@ -310,7 +421,56 @@ class AIPipelineOrchestrator:
             if z_disc:
                 attendance_events.append(z_disc)
 
-        # 9. Record Telemetry & Metrics
+        # 9. Phase 5: Anomaly Detection Engine
+        anomaly_engine = self.get_anomaly_engine(camera_id)
+        anomalies = anomaly_engine.evaluate_signals(
+            zone_transitions=zone_events,
+            loitering_events=loitering_events,
+            after_hours_events=after_hours_events,
+            crowd_events=crowd_events,
+            attendance_events=attendance_events,
+            health_result=health_result,
+            timestamp_utc=frame_payload.timestamp_utc
+        )
+
+        # 10. Multi-Signal Incident Correlation
+        incident_engine = self.get_incident_engine(camera_id)
+        incidents = incident_engine.process_anomalies(
+            new_anomalies=anomalies,
+            timestamp_utc=frame_payload.timestamp_utc
+        )
+
+        # 11. Actionable AI Alert Management
+        alert_manager = self.get_alert_manager(camera_id)
+        generated_alerts: List[AIAlert] = []
+        for inc in incidents:
+            alt = alert_manager.create_alert_from_incident(inc, timestamp_utc=frame_payload.timestamp_utc)
+            if alt:
+                generated_alerts.append(alt)
+
+        for anom in anomalies:
+            alt = alert_manager.create_alert_from_anomaly(anom, timestamp_utc=frame_payload.timestamp_utc)
+            if alt:
+                generated_alerts.append(alt)
+
+        # 12. Visual Evidence Capture & Cryptographic Sealing
+        evidence_manager = self.get_evidence_manager(camera_id)
+        evidence_records: List[EvidenceRecord] = []
+        for alt in generated_alerts:
+            evd = evidence_manager.capture_evidence(
+                frame_bgr=frame_payload.frame_bgr,
+                source_event_id=alt.alert_id,
+                event_type=alt.alert_type,
+                explanation=alt.explanation,
+                incident_id=alt.incident_id,
+                zone_id=alt.zone_id,
+                timestamp_utc=frame_payload.timestamp_utc
+            )
+            if evd:
+                alt.evidence_snapshot_id = evd.evidence_id
+                evidence_records.append(evd)
+
+        # 13. Record Telemetry & Metrics
         self.metrics.record_inference_metrics(
             camera_id=camera_id,
             latency_ms=self.detector.last_inference_latency_ms,
@@ -339,6 +499,10 @@ class AIPipelineOrchestrator:
             "zone_occupancy": [s.model_dump() for s in zone_snapshots],
             "crowd_events": [e.model_dump() for e in crowd_events],
             "attendance_events": [e.model_dump() for e in attendance_events],
+            "anomalies": [a.model_dump() for a in anomalies],
+            "incidents": [i.model_dump() for i in incidents],
+            "alerts": [al.model_dump() for al in generated_alerts],
+            "evidence": [e.model_dump() for e in evidence_records],
             "inference_latency_ms": self.detector.last_inference_latency_ms
         }
 
