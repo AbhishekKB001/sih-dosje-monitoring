@@ -96,6 +96,54 @@ class TemporalConfig(BaseModel):
     )
 
 
+class OccupancyConfig(BaseModel):
+    """Configuration for camera and zone occupancy aggregation and crowd thresholding."""
+    window_duration_sec: float = Field(
+        default=300.0, ge=10.0, description="Duration of sliding window for rolling occupancy statistics (e.g., 300s = 5 min)"
+    )
+    default_max_capacity: int = Field(
+        default=50, ge=1, description="Default maximum capacity when not explicitly defined on a zone"
+    )
+    capacity_warning_ratio: float = Field(
+        default=0.8, ge=0.1, le=1.0, description="Ratio of max capacity triggering WARNING severity"
+    )
+    capacity_critical_ratio: float = Field(
+        default=1.0, ge=0.5, le=2.0, description="Ratio of max capacity triggering CRITICAL severity"
+    )
+    confirmation_frames: int = Field(
+        default=3, ge=1, description="Consecutive frames crowd threshold must be exceeded before alert"
+    )
+    alert_cooldown_sec: float = Field(
+        default=30.0, ge=1.0, description="Cooldown between repeated crowd alerts for the same zone/camera"
+    )
+
+
+class AttendanceConsistencyConfig(BaseModel):
+    """Configuration for non-biometric comparison between reported attendance and observed occupancy."""
+    enabled: bool = Field(default=True, description="Enable attendance vs occupancy consistency evaluation")
+    default_observation_window_sec: float = Field(
+        default=900.0, ge=1.0, description="Default observation window for attendance analysis (e.g., 900s = 15 min)"
+    )
+    tolerance_percentage: float = Field(
+        default=25.0, ge=0.0, le=100.0, description="Allowed percentage discrepancy before human verification is recommended"
+    )
+    min_tolerance_absolute: int = Field(
+        default=5, ge=1, description="Minimum absolute count difference required before flagging discrepancy"
+    )
+    min_reported_attendance_for_check: int = Field(
+        default=5, ge=1, description="Minimum reported attendance to avoid division-by-zero or trivial flagging"
+    )
+    min_observation_sec: float = Field(
+        default=2.0, ge=0.0, description="Minimum elapsed stream seconds before 0-occupancy triggers discrepancy"
+    )
+    alert_cooldown_sec: float = Field(
+        default=60.0, ge=1.0, description="Cooldown between repeated discrepancy alerts"
+    )
+    use_peak_occupancy: bool = Field(
+        default=True, description="Compare reported attendance against observed peak occupancy (True) or average (False)"
+    )
+
+
 class SingleCameraConfig(BaseModel):
     """Configuration for an individual camera stream source."""
     camera_id: str = Field(..., description="Unique camera identifier, e.g. CAM-001")
@@ -109,6 +157,8 @@ class SingleCameraConfig(BaseModel):
     enabled: bool = Field(default=True, description="Whether this camera is active")
     spatial: SpatialConfig = Field(default_factory=SpatialConfig, description="Camera-specific zones and lines")
     schedule_id: Optional[str] = Field(default=None, description="Optional operational schedule ID for after-hours checks")
+    occupancy: OccupancyConfig = Field(default_factory=OccupancyConfig, description="Occupancy and crowd thresholds")
+    attendance: AttendanceConsistencyConfig = Field(default_factory=AttendanceConsistencyConfig, description="Attendance comparison config")
 
 
 class AIConfig(BaseModel):
@@ -122,6 +172,8 @@ class AIConfig(BaseModel):
     tracker: TrackerConfig = Field(default_factory=TrackerConfig)
     spatial: SpatialConfig = Field(default_factory=SpatialConfig)
     temporal: TemporalConfig = Field(default_factory=TemporalConfig)
+    occupancy: OccupancyConfig = Field(default_factory=OccupancyConfig)
+    attendance: AttendanceConsistencyConfig = Field(default_factory=AttendanceConsistencyConfig)
     
     cameras: Dict[str, SingleCameraConfig] = Field(
         default_factory=dict,
@@ -142,3 +194,4 @@ class AIConfig(BaseModel):
 
     def get_camera(self, camera_id: str) -> Optional[SingleCameraConfig]:
         return self.cameras.get(camera_id)
+

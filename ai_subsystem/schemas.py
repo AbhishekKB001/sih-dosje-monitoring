@@ -158,6 +158,9 @@ class Zone(BaseModel):
     polygon: list[tuple[float, float]] = Field(..., min_length=3)
     enabled: bool = True
     loitering_threshold_sec: Optional[float] = None  # e.g., 30.0s for restricted areas
+    max_capacity: Optional[int] = None              # Nominal maximum allowed occupancy
+    warning_threshold: Optional[int] = None         # Warning threshold count
+    critical_threshold: Optional[int] = None        # Critical crowd breach count
     metadata: dict = Field(default_factory=dict)
 
 
@@ -253,6 +256,82 @@ class AfterHoursEvent(BaseModel):
     observed_time_str: str
     timestamp_utc: float
     explanation: str
+
+
+# =====================================================================
+# Phase 4: Occupancy, Crowd Analytics & Attendance Consistency Models
+# =====================================================================
+
+class CrowdSeverity(str, Enum):
+    NORMAL = "NORMAL"
+    WARNING = "WARNING"
+    CRITICAL = "CRITICAL"
+
+
+class OccupancySnapshot(BaseModel):
+    """
+    Real-time occupancy statistics for a camera or specific zone over a rolling window.
+    """
+    timestamp_utc: float
+    camera_id: str
+    zone_id: Optional[str] = None
+    zone_name: Optional[str] = None
+    current_occupancy: int
+    peak_occupancy: int
+    min_occupancy: int
+    avg_occupancy: float
+    window_duration_sec: float
+    active_track_ids: list[int] = Field(default_factory=list)
+
+
+class CrowdThresholdEvent(BaseModel):
+    """
+    Explainable event emitted when observed occupancy exceeds configured capacity thresholds.
+    """
+    event_id: str
+    camera_id: str
+    zone_id: Optional[str] = None
+    zone_name: Optional[str] = None
+    current_occupancy: int
+    threshold: int
+    severity: CrowdSeverity
+    timestamp_utc: float
+    explanation: str
+
+
+class ReportedAttendance(BaseModel):
+    """
+    Non-biometric official attendance figure reported by an institution.
+    """
+    institution_id: str
+    camera_id: Optional[str] = None
+    zone_id: Optional[str] = None
+    session_name: str = "Standard Session"
+    reported_count: int = Field(ge=0, description="Total reported attendees")
+    timestamp_utc: float = Field(default_factory=time.time)
+    metadata: dict = Field(default_factory=dict)
+
+
+class AttendanceDiscrepancyEvent(BaseModel):
+    """
+    Explainable operational event comparing anonymous observed occupancy vs reported attendance.
+    Strictly adheres to neutral operational review terminology (never claims fraud).
+    """
+    event_id: str
+    camera_id: str
+    institution_id: Optional[str] = None
+    zone_id: Optional[str] = None
+    timestamp_utc: float
+    reported_attendance: int
+    observed_occupancy: int
+    observation_window_sec: float
+    discrepancy_value: int
+    discrepancy_percentage: float
+    tolerance_percentage: float
+    explanation: str
+    config_version: str = "cfg-2026.4"
+    model_version: str = "v1.0.0"
+
 
 
 class FramePayload:

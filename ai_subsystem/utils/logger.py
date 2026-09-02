@@ -26,4 +26,6 @@ def setup_logger(name: str = "ai_subsystem", level: int = logging.INFO) -> loggi
     return logger
 
 
+get_logger = setup_logger
 logger = setup_logger()
+

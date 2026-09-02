@@ -11,6 +11,8 @@ from ai_subsystem.analytics.spatial import (
 )
 from ai_subsystem.analytics.schedule import ScheduleEvaluator, is_timestamp_in_window
 from ai_subsystem.analytics.temporal import TemporalEngine
+from ai_subsystem.analytics.occupancy import OccupancyAnalyzer, CrowdAnalyticsEngine
+from ai_subsystem.analytics.attendance import AttendanceConsistencyEngine
 
 __all__ = [
     "PolygonZoneEngine",
@@ -21,4 +23,8 @@ __all__ = [
     "ScheduleEvaluator",
     "is_timestamp_in_window",
     "TemporalEngine",
+    "OccupancyAnalyzer",
+    "CrowdAnalyticsEngine",
+    "AttendanceConsistencyEngine",
 ]
+

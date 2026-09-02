@@ -8,15 +8,21 @@ from ai_subsystem.adapters.event_publisher import BaseEventPublisher, InMemoryEv
 from ai_subsystem.adapters.storage_adapter import BaseStorageAdapter, LocalStorageAdapter
 from ai_subsystem.analytics.spatial import LineCrossingEngine, PolygonZoneEngine
 from ai_subsystem.analytics.temporal import TemporalEngine
+from ai_subsystem.analytics.occupancy import OccupancyAnalyzer, CrowdAnalyticsEngine
+from ai_subsystem.analytics.attendance import AttendanceConsistencyEngine
 from ai_subsystem.config import AIConfig, SingleCameraConfig
 from ai_subsystem.manager.source_manager import SourceManager
 from ai_subsystem.observability.metrics import MetricsCollector
 from ai_subsystem.schemas import (
     AfterHoursEvent,
+    AttendanceDiscrepancyEvent,
+    CrowdThresholdEvent,
     Detection,
     FramePayload,
     LineCrossingEvent,
     LoiteringEvent,
+    OccupancySnapshot,
+    ReportedAttendance,
     StreamEvent,
     Track,
     TrackState,
@@ -34,7 +40,8 @@ class AIPipelineOrchestrator:
     """
     Master pipeline coordinator.
     Routes frames through: Ingestion -> Visual Health -> YOLOv8 Detection -> ByteTrack Tracking
-    -> Spatial Polygon & Line Analytics -> Temporal Loitering & After-Hours Intelligence.
+    -> Spatial Polygon & Line Analytics -> Temporal Loitering & After-Hours Intelligence
+    -> Occupancy & Crowd Analytics -> Non-Biometric Attendance Consistency Evaluation.
     """
 
     def __init__(
@@ -62,6 +69,9 @@ class AIPipelineOrchestrator:
         self._zone_engines: Dict[str, PolygonZoneEngine] = {}
         self._line_engines: Dict[str, LineCrossingEngine] = {}
         self._temporal_engines: Dict[str, TemporalEngine] = {}
+        self._occupancy_analyzers: Dict[str, OccupancyAnalyzer] = {}
+        self._crowd_engines: Dict[str, CrowdAnalyticsEngine] = {}
+        self._attendance_engines: Dict[str, AttendanceConsistencyEngine] = {}
 
         # Initialize multi-camera source manager
         self.source_manager = SourceManager(
@@ -76,7 +86,7 @@ class AIPipelineOrchestrator:
         )
 
     def register_camera(self, camera_cfg: SingleCameraConfig) -> None:
-        """Registers and prepares a camera and its dedicated spatial/temporal engines."""
+        """Registers and prepares a camera and its dedicated spatial/temporal/occupancy engines."""
         self.config.add_camera(camera_cfg)
         self.source_manager.add_camera(camera_cfg)
         cid = camera_cfg.camera_id
@@ -103,6 +113,16 @@ class AIPipelineOrchestrator:
             camera_id=cid,
             config=self.config.temporal,
             schedule=matched_sched
+        )
+
+        # Initialize Occupancy & Attendance Engines
+        self._occupancy_analyzers[cid] = OccupancyAnalyzer(camera_id=cid, config=camera_cfg.occupancy)
+        self._crowd_engines[cid] = CrowdAnalyticsEngine(camera_id=cid, config=camera_cfg.occupancy)
+        self._attendance_engines[cid] = AttendanceConsistencyEngine(
+            camera_id=cid,
+            config=camera_cfg.attendance,
+            config_version=self.config.config_version,
+            model_version=self.config.model_version
         )
 
     def get_tracker(self, camera_id: str) -> MultiObjectTracker:
@@ -136,6 +156,45 @@ class AIPipelineOrchestrator:
             self._temporal_engines[camera_id] = TemporalEngine(camera_id=camera_id, config=self.config.temporal)
         return self._temporal_engines[camera_id]
 
+    def get_occupancy_analyzer(self, camera_id: str) -> OccupancyAnalyzer:
+        """Retrieves or creates the isolated occupancy analyzer for a specific camera."""
+        if camera_id not in self._occupancy_analyzers:
+            cam_cfg = self.config.get_camera(camera_id)
+            occ_cfg = cam_cfg.occupancy if cam_cfg else self.config.occupancy
+            self._occupancy_analyzers[camera_id] = OccupancyAnalyzer(camera_id=camera_id, config=occ_cfg)
+        return self._occupancy_analyzers[camera_id]
+
+    def get_crowd_engine(self, camera_id: str) -> CrowdAnalyticsEngine:
+        """Retrieves or creates the isolated crowd analytics engine for a specific camera."""
+        if camera_id not in self._crowd_engines:
+            cam_cfg = self.config.get_camera(camera_id)
+            occ_cfg = cam_cfg.occupancy if cam_cfg else self.config.occupancy
+            self._crowd_engines[camera_id] = CrowdAnalyticsEngine(camera_id=camera_id, config=occ_cfg)
+        return self._crowd_engines[camera_id]
+
+    def get_attendance_engine(self, camera_id: str) -> AttendanceConsistencyEngine:
+        """Retrieves or creates the isolated attendance consistency engine for a specific camera."""
+        if camera_id not in self._attendance_engines:
+            cam_cfg = self.config.get_camera(camera_id)
+            att_cfg = cam_cfg.attendance if cam_cfg else self.config.attendance
+            self._attendance_engines[camera_id] = AttendanceConsistencyEngine(
+                camera_id=camera_id,
+                config=att_cfg,
+                config_version=self.config.config_version,
+                model_version=self.config.model_version
+            )
+        return self._attendance_engines[camera_id]
+
+    def register_reported_attendance(self, record: ReportedAttendance) -> None:
+        """Registers a reported attendance record for a specific camera or globally."""
+        if record.camera_id:
+            engine = self.get_attendance_engine(record.camera_id)
+            engine.register_reported_attendance(record)
+        else:
+            for cid in self.config.cameras.keys():
+                engine = self.get_attendance_engine(cid)
+                engine.register_reported_attendance(record)
+
     def start(self) -> None:
         """Starts stream ingestion across all configured cameras."""
         logger.info("Starting AIPipelineOrchestrator...")
@@ -152,7 +211,8 @@ class AIPipelineOrchestrator:
         """
         Main execution pipeline for a sampled frame.
         Coordinates: Ingestion -> Visual Health -> Preprocessing -> Detection -> Tracking
-        -> Spatial Polygon Zones -> Virtual Line Crossing -> Temporal Loitering & After-Hours.
+        -> Spatial Polygon Zones -> Virtual Line Crossing -> Temporal Loitering & After-Hours
+        -> Occupancy & Crowd Analytics -> Non-Biometric Attendance Consistency Evaluation.
         """
         camera_id = frame_payload.camera_id
         
@@ -174,7 +234,11 @@ class AIPipelineOrchestrator:
                 "zone_events": [],
                 "line_events": [],
                 "loitering_events": [],
-                "after_hours_events": []
+                "after_hours_events": [],
+                "occupancy": None,
+                "zone_occupancy": [],
+                "crowd_events": [],
+                "attendance_events": []
             }
 
         # 3. Object Detection (YOLOv8)
@@ -212,7 +276,41 @@ class AIPipelineOrchestrator:
                 timestamp_utc=frame_payload.timestamp_utc
             )
 
-        # 7. Record Telemetry & Metrics
+        # 7. Occupancy & Crowd Analytics
+        occupancy_analyzer = self.get_occupancy_analyzer(camera_id)
+        camera_snapshot, zone_snapshots = occupancy_analyzer.update(
+            tracks=active_tracks,
+            zone_engine=zone_engine,
+            timestamp_utc=frame_payload.timestamp_utc
+        )
+
+        crowd_engine = self.get_crowd_engine(camera_id)
+        crowd_events = crowd_engine.evaluate(
+            camera_snapshot=camera_snapshot,
+            zone_snapshots=zone_snapshots,
+            zones_map=zone_engine.get_zones(),
+            timestamp_utc=frame_payload.timestamp_utc
+        )
+
+        # 8. Non-Biometric Attendance Consistency Evaluation
+        attendance_events: List[AttendanceDiscrepancyEvent] = []
+        attendance_engine = self.get_attendance_engine(camera_id)
+        discrepancy_event = attendance_engine.evaluate_consistency(
+            occupancy_snapshot=camera_snapshot,
+            timestamp_utc=frame_payload.timestamp_utc
+        )
+        if discrepancy_event:
+            attendance_events.append(discrepancy_event)
+
+        for z_snap in zone_snapshots:
+            z_disc = attendance_engine.evaluate_consistency(
+                occupancy_snapshot=z_snap,
+                timestamp_utc=frame_payload.timestamp_utc
+            )
+            if z_disc:
+                attendance_events.append(z_disc)
+
+        # 9. Record Telemetry & Metrics
         self.metrics.record_inference_metrics(
             camera_id=camera_id,
             latency_ms=self.detector.last_inference_latency_ms,
@@ -237,6 +335,10 @@ class AIPipelineOrchestrator:
             "line_events": [e.model_dump() for e in line_events],
             "loitering_events": [e.model_dump() for e in loitering_events],
             "after_hours_events": [e.model_dump() for e in after_hours_events],
+            "occupancy": camera_snapshot.model_dump(),
+            "zone_occupancy": [s.model_dump() for s in zone_snapshots],
+            "crowd_events": [e.model_dump() for e in crowd_events],
+            "attendance_events": [e.model_dump() for e in attendance_events],
             "inference_latency_ms": self.detector.last_inference_latency_ms
         }
 
