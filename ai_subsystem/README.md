@@ -84,14 +84,31 @@ This subsystem represents **Member 4's core contribution** to the SIH26095 DoSJE
 * **`CameraWorker`**: Isolated thread per camera. Decoupled asynchronous producer-consumer pipeline preventing video ingestion backpressure.
 * **`SourceManager`**: Multi-camera lifecycle and fault-isolation coordinator.
 
-### 10. Pipeline Orchestrator (`ai_subsystem/orchestrator.py`)
-* **`AIPipelineOrchestrator`**: Master integration coordinator: Ingestion $\rightarrow$ Visual Health $\rightarrow$ YOLO Detection $\rightarrow$ ByteTrack Tracking $\rightarrow$ Spatial Polygon Zones $\rightarrow$ Line Crossing $\rightarrow$ Temporal Analytics $\rightarrow$ Occupancy & Crowd $\rightarrow$ Attendance Consistency $\rightarrow$ Anomaly Detection $\rightarrow$ Incident Correlation $\rightarrow$ AI Alerts $\rightarrow$ Cryptographically Sealed Evidence Snapshots.
+### 11. REST API, Real-Time SSE & Teammate Integration Adapters (`ai_subsystem/adapters/`)
+* **`Member4APIService` (`api_service.py`)**:
+  * Lightweight, framework-agnostic HTTP REST and Server-Sent Events (SSE) server using Python's standard library.
+  * Endpoints:
+    * `GET /api/v1/health` — System status, uptime, and model version.
+    * `GET /api/v1/cameras` — Registered cameras and telemetry.
+    * `GET /api/v1/cameras/{id}/occupancy` — Real-time room occupancy and window stats.
+    * `GET /api/v1/cameras/{id}/alerts` — Actionable alerts with recommendations.
+    * `POST /api/v1/alerts/{id}/acknowledge` — Supervisor alert acknowledgment.
+    * `POST /api/v1/alerts/{id}/resolve` — Supervisor alert resolution.
+    * `GET /api/v1/evidence/{id}` — Visual evidence JPEG snapshot binary retrieval.
+    * `GET /api/v1/evidence/{id}/verify` — SHA-256 cryptographic verification.
+    * `POST /api/v1/reviews` — Supervisor audit review submission.
+    * `POST /api/v1/attendance` — Register administrative attendance count.
+    * `GET /api/v1/events/stream` — Real-time SSE event streaming.
+    * `GET /api/v1/audit` — Persistent JSON audit log inspection.
+* **`fastapi_router.py`**: Plug-and-play APIRouter ready for Member 1 (`app.include_router(get_ai_router(orch))`).
+* **`FLUTTER_INTEGRATION_CONTRACT.md`**: Complete Dart models and UI presentation contract for Member 2/5.
+* **`LocalStorageAdapter`**: Persistent audit trail stored in `evidence_store/audit_log.json`.
 
 ---
 
 ## Running Tests & Standalone Demos
 
-### 1. Run All Automated Tests (71 Tests Passing)
+### 1. Run All Automated Tests (79 Tests Passing across Phases 1–6)
 ```bash
 .\venv\Scripts\pytest -v
 ```
@@ -115,13 +132,32 @@ This subsystem represents **Member 4's core contribution** to the SIH26095 DoSJE
 ```bash
 .\venv\Scripts\python run_phase4_demo.py
 ```
-*(Saves annotated detection snapshot to `data/demo_phase4_annotated.jpg`)*
 
 ### 6. Run Standalone Phase 5 Demo (Anomalies, Incidents, Alerts & SHA-256 Sealed Evidence)
 ```bash
 .\venv\Scripts\python run_phase5_demo.py
 ```
-*(Captures sealed evidence snapshot under `data/evidence/` with SHA-256 verification and human review)*
+
+### 7. Run Standalone Phase 6 Final Integration Demo (Full Pipeline, REST API, SSE & Review)
+```bash
+.\venv\Scripts\python run_phase6_integration_demo.py
+```
+
+---
+
+## Deployment Options
+
+### Standalone Docker Container
+```bash
+docker build -t sih2026-member4-ai .
+docker run -p 8000:8000 -v ./data:/app/data sih2026-member4-ai
+```
+
+### Docker Compose
+```bash
+docker-compose up -d
+```
+
 
 
 

@@ -40,6 +40,22 @@ class OccupancyAnalyzer:
         # Rolling observation histories: deque of (timestamp_utc, count)
         self._camera_history: deque[Tuple[float, int]] = deque()
         self._zone_histories: Dict[str, deque[Tuple[float, int]]] = {}
+        self._last_camera_snapshot: Optional[OccupancySnapshot] = None
+
+    def get_occupancy_snapshot(self) -> OccupancySnapshot:
+        """Returns the most recent camera occupancy snapshot or zero-occupancy default."""
+        if self._last_camera_snapshot is not None:
+            return self._last_camera_snapshot
+        return OccupancySnapshot(
+            timestamp_utc=time.time(),
+            camera_id=self.camera_id,
+            current_occupancy=0,
+            peak_occupancy=0,
+            min_occupancy=0,
+            avg_occupancy=0.0,
+            window_duration_sec=self.config.window_duration_sec,
+            active_track_ids=[]
+        )
 
     def update(
         self,
@@ -125,6 +141,7 @@ class OccupancyAnalyzer:
                     active_track_ids=sorted(list(tracks_in_zone))
                 ))
 
+        self._last_camera_snapshot = camera_snapshot
         return camera_snapshot, zone_snapshots
 
     @staticmethod

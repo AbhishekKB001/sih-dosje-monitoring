@@ -469,6 +469,20 @@ class AIPipelineOrchestrator:
             if evd:
                 alt.evidence_snapshot_id = evd.evidence_id
                 evidence_records.append(evd)
+                self.storage.save_evidence_record(evd)
+
+        # Publish and Persist Phase 5 Intelligence Signals
+        for anom in anomalies:
+            self.publisher.publish_anomaly(anom)
+            self.storage.save_anomaly(anom)
+
+        for inc in incidents:
+            self.publisher.publish_incident(inc)
+            self.storage.save_incident(inc)
+
+        for alt in generated_alerts:
+            self.publisher.publish_alert(alt)
+            self.storage.save_alert(alt)
 
         # 13. Record Telemetry & Metrics
         self.metrics.record_inference_metrics(

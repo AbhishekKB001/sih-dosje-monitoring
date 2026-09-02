@@ -194,6 +194,7 @@ class AIAlertManager:
         now_ts = timestamp_utc if timestamp_utc is not None else time.time()
         alert.lifecycle_state = AlertLifecycleState.RESOLVED
         alert.resolved_at_utc = now_ts
+        alert.resolved_by = user_id
         alert.resolution_notes = notes
 
         logger.info(f"[{self.camera_id}] Alert '{alert_id}' RESOLVED by user '{user_id}' (Notes: {notes})")
@@ -214,6 +215,7 @@ class AIAlertManager:
         now_ts = timestamp_utc if timestamp_utc is not None else time.time()
         alert.lifecycle_state = AlertLifecycleState.DISMISSED
         alert.resolved_at_utc = now_ts
+        alert.resolved_by = user_id
         alert.resolution_notes = notes
 
         logger.info(f"[{self.camera_id}] Alert '{alert_id}' DISMISSED by user '{user_id}' (Notes: {notes})")

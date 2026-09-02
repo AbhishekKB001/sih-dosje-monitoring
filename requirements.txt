@@ -1,0 +1,14 @@
+# Member 4 AI Intelligence Subsystem — Core Dependencies
+# Python 3.10+ compatible
+
+numpy>=1.24.0
+opencv-python-headless>=4.8.0
+pydantic>=2.5.0
+pydantic-core>=2.14.0
+ultralytics>=8.1.0
+torch>=2.0.0
+torchvision>=0.15.0
+psutil>=5.9.0
+requests>=2.31.0
+pytest>=7.4.0
+anyio>=4.0.0

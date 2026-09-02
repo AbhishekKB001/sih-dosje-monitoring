@@ -448,6 +448,7 @@ class AIAlert(BaseModel):
     acknowledged_at_utc: Optional[float] = None
     resolved_at_utc: Optional[float] = None
     acknowledged_by: Optional[str] = None
+    resolved_by: Optional[str] = None
     resolution_notes: Optional[str] = None
     title: str
     explanation: str

@@ -50,26 +50,26 @@ def test_alert_manager_lifecycle_transitions():
     # 2. Acknowledge alert
     ack_alert = manager.acknowledge_alert(
         alert.alert_id,
-        user_id="supervisor_rajesh",
+        user_id="supervisor_demo",
         notes="Security team dispatched to Zone A",
         timestamp_utc=105.0
     )
     assert ack_alert is not None
     assert ack_alert.lifecycle_state == AlertLifecycleState.ACKNOWLEDGED
-    assert ack_alert.acknowledged_by == "supervisor_rajesh"
+    assert ack_alert.acknowledged_by == "supervisor_demo"
     assert ack_alert.acknowledged_at_utc == 105.0
 
     # 3. Resolve alert
     res_alert = manager.resolve_alert(
         alert.alert_id,
-        user_id="supervisor_rajesh",
-        notes="Authorized maintenance staff verified with badge #9921",
+        user_id="supervisor_demo",
+        notes="Authorized maintenance staff verified. Demo authorization verified.",
         timestamp_utc=120.0
     )
     assert res_alert is not None
     assert res_alert.lifecycle_state == AlertLifecycleState.RESOLVED
     assert res_alert.resolved_at_utc == 120.0
-    assert "badge #9921" in res_alert.resolution_notes
+    assert "Demo authorization verified" in res_alert.resolution_notes
 
 
 def test_alert_cooldown_throttling():

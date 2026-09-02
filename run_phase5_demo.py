@@ -208,7 +208,7 @@ def run_phase5_demo():
         # Step A: Supervisor acknowledges alert
         alert_mgr.acknowledge_alert(
             alert_id=alert_to_review.alert_id,
-            user_id="supervisor_rajesh_kumar",
+            user_id="supervisor_demo",
             notes="Security patrol dispatched to Document Room"
         )
         logger.info(f"  -> State updated to: {alert_to_review.lifecycle_state.value} by '{alert_to_review.acknowledged_by}'")
@@ -216,15 +216,15 @@ def run_phase5_demo():
         # Step B: Supervisor resolves alert
         alert_mgr.resolve_alert(
             alert_id=alert_to_review.alert_id,
-            user_id="supervisor_rajesh_kumar",
-            notes="Authorized system maintenance by IT contractor. Badge #8841 verified."
+            user_id="supervisor_demo",
+            notes="Authorized system maintenance by IT contractor. Demo authorization verified."
         )
         logger.info(f"  -> State updated to: {alert_to_review.lifecycle_state.value} (Notes: {alert_to_review.resolution_notes})")
 
         # Step C: Supervisor registers structured audit feedback
         review = evd_mgr.submit_human_review(
             target_id=alert_to_review.alert_id,
-            reviewer_id="supervisor_rajesh_kumar",
+            reviewer_id="supervisor_demo",
             outcome=ReviewOutcome.TRUE_EVENT,
             notes="Genuine physical entry event. Operational logs reconciled."
         )
