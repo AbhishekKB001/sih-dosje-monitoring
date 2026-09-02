@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 from ai_subsystem.config import AIConfig, SingleCameraConfig, SourceType
 from ai_subsystem.orchestrator import AIPipelineOrchestrator
-from ai_subsystem.schemas import Detection, FramePayload, TrackState, VisualHealthResult, VisualHealthState
+from ai_subsystem.schemas import Detection, FramePayload, SourceState, TrackState, VisualHealthResult, VisualHealthState
 from ai_subsystem.vision.detector import DeterministicMockDetector
 
 
@@ -99,3 +99,45 @@ def test_orchestrator_multi_camera_tracking_isolation():
     assert len(tracker_beta._tracks) == 1
     assert tracker_alpha._tracks[1].camera_id == "CAM-ALPHA"
     assert tracker_beta._tracks[1].camera_id == "CAM-BETA"
+
+
+def test_orchestrator_multi_camera_live_failure_isolation(tmp_path):
+    """Verifies that when Camera A fails/crashes, Camera B continues streaming and tracking."""
+    import time
+    from ai_subsystem.utils.synthetic_video import generate_demo_video
+    
+    valid_video = str(tmp_path / "valid_stream.mp4")
+    generate_demo_video(valid_video, num_frames=50, width=320, height=240, fps=25)
+    
+    config = AIConfig()
+    mock_detector = DeterministicMockDetector(config=config.detector)
+    orchestrator = AIPipelineOrchestrator(config=config, detector=mock_detector)
+
+    # Register Camera A (Non-existent/broken URI)
+    orchestrator.register_camera(SingleCameraConfig(
+        camera_id="CAM-FAILING-01",
+        source_type=SourceType.DEMO,
+        uri=str(tmp_path / "non_existent.mp4"),
+        loop_video=False
+    ))
+    
+    # Register Camera B (Valid video stream)
+    orchestrator.register_camera(SingleCameraConfig(
+        camera_id="CAM-HEALTHY-02",
+        source_type=SourceType.DEMO,
+        uri=valid_video,
+        loop_video=True
+    ))
+
+    # Start orchestrator
+    orchestrator.start()
+    time.sleep(1.2)
+
+    status = orchestrator.get_system_status()
+    orchestrator.stop()
+
+    # Camera A should be in ERROR state
+    assert status["cameras"]["CAM-FAILING-01"]["source_state"] == SourceState.ERROR
+    # Camera B should be STREAMING with frames ingested
+    assert status["cameras"]["CAM-HEALTHY-02"]["source_state"] == SourceState.STREAMING
+    assert status["cameras"]["CAM-HEALTHY-02"]["frames_read_total"] > 10

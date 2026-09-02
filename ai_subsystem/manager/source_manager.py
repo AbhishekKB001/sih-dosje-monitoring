@@ -3,6 +3,7 @@ Source Manager and Multi-Camera Worker Pool for Member 4 AI Subsystem.
 Provides isolated multi-camera processing, thread supervision, and fault isolation.
 """
 
+import queue
 import threading
 import time
 from typing import Callable, Dict, Optional
@@ -21,8 +22,9 @@ from ai_subsystem.vision.visual_health import VisualHealthMonitor
 
 class CameraWorker:
     """
-    Supervised worker thread responsible for reading and health-checking a single camera feed.
-    Guarantees that a crash/timeout in this camera will not affect other cameras.
+    Supervised multi-threaded worker responsible for reading and processing a single camera feed.
+    Decouples frame ingestion (Producer) from AI inference (Consumer) via a bounded queue.
+    Guarantees that a crash, timeout, or slow inference in this camera will not affect other cameras.
     """
 
     def __init__(
@@ -42,8 +44,10 @@ class CameraWorker:
         self.health_monitor = VisualHealthMonitor(camera_id=self.camera_id)
         self.sampler = FrameSampler()
 
+        self._processing_queue: queue.Queue = queue.Queue(maxsize=self.sampler.config.max_queue_size)
         self._running = False
-        self._thread: Optional[threading.Thread] = None
+        self._ingestion_thread: Optional[threading.Thread] = None
+        self._processing_thread: Optional[threading.Thread] = None
         self._prev_health_state: VisualHealthState = VisualHealthState.HEALTHY
 
         self.metrics.register_camera(self.camera_id, config.institution_id)
@@ -83,26 +87,34 @@ class CameraWorker:
             raise ValueError(f"Unknown source type: {cfg.source_type}")
 
     def start(self) -> None:
-        """Starts the worker thread."""
+        """Starts the ingestion and processing worker threads."""
         if self._running:
             return
         self._running = True
-        self._thread = threading.Thread(target=self._run_loop, name=f"CameraWorker-{self.camera_id}", daemon=True)
-        self._thread.start()
-        logger.info(f"[{self.camera_id}] Worker thread started")
+        self._ingestion_thread = threading.Thread(
+            target=self._ingestion_loop, name=f"Ingestion-{self.camera_id}", daemon=True
+        )
+        self._processing_thread = threading.Thread(
+            target=self._processing_loop, name=f"Processing-{self.camera_id}", daemon=True
+        )
+        self._ingestion_thread.start()
+        self._processing_thread.start()
+        logger.info(f"[{self.camera_id}] Ingestion and Processing workers started")
 
     def stop(self) -> None:
-        """Stops the worker thread and cleans up resources."""
+        """Stops worker threads and cleans up resources."""
         self._running = False
         if self.source:
             self.source.disconnect()
-        if self._thread and self._thread.is_alive():
-            self._thread.join(timeout=2.0)
+        if self._ingestion_thread and self._ingestion_thread.is_alive():
+            self._ingestion_thread.join(timeout=1.5)
+        if self._processing_thread and self._processing_thread.is_alive():
+            self._processing_thread.join(timeout=1.5)
         self.metrics.update_source_state(self.camera_id, SourceState.CLOSED)
-        logger.info(f"[{self.camera_id}] Worker thread stopped")
+        logger.info(f"[{self.camera_id}] Workers stopped")
 
-    def _run_loop(self) -> None:
-        """Main camera ingestion and visual health evaluation loop."""
+    def _ingestion_loop(self) -> None:
+        """Producer: continuously captures frames and monitors visual health at native camera FPS."""
         try:
             connected = self.source.connect()
             if not connected:
@@ -120,23 +132,21 @@ class CameraWorker:
                         continue
                     self._emit_event("CAMERA_STREAM_RECOVERED", "INFO", "Stream re-established successfully")
 
-                start_ts = time.time()
                 success, frame_payload = self.source.read_frame()
 
                 if not success or frame_payload is None:
                     if self.source.get_state() == SourceState.CLOSED:
-                        # Video completed (non-looping demo)
                         break
-                    time.sleep(0.01)
+                    time.sleep(0.005)
                     continue
 
+                # Record frame ingestion
                 self.metrics.record_frame_read(self.camera_id, frame_payload.timestamp_utc)
 
-                # Check visual content health (Blur / Freeze / Black screen / Low light)
+                # Check fast visual content health (Blur / Freeze / Black screen / Low light)
                 health_result = self.health_monitor.analyze_frame(frame_payload)
                 self.metrics.update_health_state(self.camera_id, health_result.state)
 
-                # Detect state changes and emit health events
                 if health_result.state != self._prev_health_state:
                     severity = "INFO" if health_result.is_healthy else "WARNING"
                     self._emit_event(
@@ -147,26 +157,47 @@ class CameraWorker:
                     )
                     self._prev_health_state = health_result.state
 
-                # Apply frame downsampling / pacing for downstream deep AI
+                # Check sampling rate for AI consumer
                 if self.sampler.should_sample(frame_payload):
-                    if self.frame_handler is not None:
-                        try:
-                            self.frame_handler(frame_payload, health_result)
-                        except Exception as e:
-                            logger.error(f"[{self.camera_id}] Error in downstream frame handler: {e}")
+                    try:
+                        self._processing_queue.put_nowait((frame_payload, health_result))
+                    except queue.Full:
+                        if self.sampler.config.drop_oldest_on_full:
+                            try:
+                                self._processing_queue.get_nowait()
+                                self._processing_queue.put_nowait((frame_payload, health_result))
+                            except (queue.Empty, queue.Full):
+                                pass
+                        self.metrics.record_frame_dropped(self.camera_id)
                 else:
                     self.metrics.record_frame_dropped(self.camera_id)
 
-                # Update latency metric
-                elapsed_ms = (time.time() - start_ts) * 1000.0
-                self.metrics.record_pipeline_latency(self.camera_id, elapsed_ms)
-
         except Exception as e:
-            logger.error(f"[{self.camera_id}] Fatal unhandled worker exception: {e}", exc_info=True)
+            logger.error(f"[{self.camera_id}] Unhandled ingestion exception: {e}", exc_info=True)
             self.metrics.update_source_state(self.camera_id, SourceState.ERROR)
-            self._emit_event("WORKER_CRASHED", "CRITICAL", f"Camera worker crashed: {e}")
+            self._emit_event("WORKER_CRASHED", "CRITICAL", f"Ingestion worker crashed: {e}")
         finally:
             self.source.disconnect()
+
+    def _processing_loop(self) -> None:
+        """Consumer: pulls sampled frames from queue and executes AI pipeline."""
+        while self._running:
+            try:
+                item = self._processing_queue.get(timeout=0.1)
+            except queue.Empty:
+                continue
+
+            frame_payload, health_result = item
+            start_proc = time.time()
+            if self.frame_handler is not None:
+                try:
+                    self.frame_handler(frame_payload, health_result)
+                except Exception as e:
+                    logger.error(f"[{self.camera_id}] Error in AI frame handler: {e}")
+
+            elapsed_ms = (time.time() - start_proc) * 1000.0
+            self.metrics.record_pipeline_latency(self.camera_id, elapsed_ms)
+            self._processing_queue.task_done()
 
     def _emit_event(self, event_type: str, severity: str, message: str, details: Optional[dict] = None) -> None:
         """Helper to fire stream/health events."""

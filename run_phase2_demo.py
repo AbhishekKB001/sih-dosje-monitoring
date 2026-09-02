@@ -64,12 +64,11 @@ def run_demo():
     orchestrator.start()
 
     # 4. Monitor real-time telemetry for 4 seconds
-    last_annotated_frame = None
     for i in range(4):
         time.sleep(1.0)
         status = orchestrator.get_system_status()
         summary = status["summary"]
-        logger.info(f"--- [Tick #{i+1}] AI Pipeline Telemetry ---")
+        logger.info(f"--- [Tick #{i+1}] AI Multi-Camera Pipeline Telemetry ---")
         logger.info(
             f"Active Streaming Cameras: {summary['active_streaming_cameras']} | "
             f"Total Frames Ingested: {summary['total_frames_read']} | "
@@ -77,9 +76,12 @@ def run_demo():
         )
         for cid, m in status["cameras"].items():
             logger.info(
-                f"  [{cid}] State: {m['source_state']} | Health: {m['health_state']} | "
-                f"Frames: {m['frames_read_total']} | Active Tracks: {m['active_tracks_count']} | "
-                f"Latency: {m['pipeline_latency_ms']:.2f}ms"
+                f"  [{cid}] Ingested: {m['frames_read_total']} frames ({m['input_fps']:.1f} FPS) | "
+                f"Dropped/Paced: {m['frames_dropped_total']} | "
+                f"Processed: {m['processed_fps']:.1f} AI-FPS | "
+                f"Active Tracks: {m['active_tracks_count']} | "
+                f"Latency: {m['pipeline_latency_ms']:.2f}ms | "
+                f"Health: {m['health_state']}"
             )
 
     # 5. Extract and annotate a sample frame for visual verification
