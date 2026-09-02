@@ -47,6 +47,31 @@ class SamplingConfig(BaseModel):
     drop_oldest_on_full: bool = Field(default=True, description="Drop oldest frames when processing buffer is full")
 
 
+class DetectorConfig(BaseModel):
+    """Configuration for YOLOv8 Object Detection."""
+    enabled: bool = Field(default=True, description="Enable object detection")
+    model_name: str = Field(default="yolov8n.pt", description="YOLO model path or identifier (e.g. yolov8n.pt, yolov8s.pt)")
+    confidence_threshold: float = Field(default=0.35, ge=0.01, le=1.0, description="Minimum detection confidence score")
+    iou_threshold: float = Field(default=0.45, ge=0.01, le=1.0, description="NMS IoU threshold")
+    input_size: int = Field(default=640, ge=128, le=1280, description="Model input image resolution")
+    target_classes: List[str] = Field(default_factory=lambda: ["person"], description="List of target class names to detect (e.g. ['person', 'car'])")
+    device: str = Field(default="cpu", description="Inference device ('cpu', 'cuda', 'cuda:0')")
+    half_precision: bool = Field(default=False, description="Use FP16 half precision if supported by GPU")
+
+
+class TrackerConfig(BaseModel):
+    """Configuration for ByteTrack Multi-Object Tracking."""
+    enabled: bool = Field(default=True, description="Enable multi-object tracking")
+    tracker_type: str = Field(default="bytetrack", description="Tracker algorithm name")
+    track_high_thresh: float = Field(default=0.5, ge=0.1, le=1.0, description="High confidence threshold for 1st association step")
+    track_low_thresh: float = Field(default=0.1, ge=0.01, le=0.5, description="Low confidence threshold for 2nd association step")
+    new_track_thresh: float = Field(default=0.4, ge=0.1, le=1.0, description="Confidence threshold required to spawn a new track")
+    match_iou_thresh: float = Field(default=0.3, ge=0.01, le=1.0, description="Minimum IoU overlap to match detection to track")
+    min_hits_to_active: int = Field(default=2, ge=1, description="Consecutive detections before track becomes ACTIVE")
+    max_lost_frames: int = Field(default=30, ge=1, description="Max consecutive lost frames before track is EXPIRED")
+    max_history_length: int = Field(default=50, ge=5, description="Max bounding box / trajectory positions retained in memory")
+
+
 class SingleCameraConfig(BaseModel):
     """Configuration for an individual camera stream source."""
     camera_id: str = Field(..., description="Unique camera identifier, e.g. CAM-001")
@@ -67,6 +92,8 @@ class AIConfig(BaseModel):
     
     visual_health: VisualHealthConfig = Field(default_factory=VisualHealthConfig)
     sampling: SamplingConfig = Field(default_factory=SamplingConfig)
+    detector: DetectorConfig = Field(default_factory=DetectorConfig)
+    tracker: TrackerConfig = Field(default_factory=TrackerConfig)
     
     cameras: Dict[str, SingleCameraConfig] = Field(
         default_factory=dict,

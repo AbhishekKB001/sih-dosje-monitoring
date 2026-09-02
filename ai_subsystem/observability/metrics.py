@@ -74,6 +74,22 @@ class MetricsCollector:
                 if metrics.pipeline_latency_ms > 0 else latency_ms
             )
 
+    def record_inference_metrics(
+        self,
+        camera_id: str,
+        latency_ms: float,
+        detection_count: int,
+        active_tracks_count: int
+    ) -> None:
+        """Records AI inference latency and object counts."""
+        metrics = self._cameras.get(camera_id)
+        if metrics:
+            metrics.active_tracks_count = active_tracks_count
+            metrics.pipeline_latency_ms = (
+                0.7 * metrics.pipeline_latency_ms + 0.3 * latency_ms
+                if metrics.pipeline_latency_ms > 0 else latency_ms
+            )
+
     def get_camera_metrics(self, camera_id: str) -> Optional[CameraMetrics]:
         """Returns current snapshot metrics for a single camera."""
         return self._cameras.get(camera_id)

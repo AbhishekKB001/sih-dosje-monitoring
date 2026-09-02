@@ -12,6 +12,10 @@ venv/
 __pycache__/
 evidence_store/
 data/
+*.pt
+*.onnx
+weights/
+runs/
 # Flutter repo-specific
 /bin/cache/
 /bin/internal/bootstrap.bat
