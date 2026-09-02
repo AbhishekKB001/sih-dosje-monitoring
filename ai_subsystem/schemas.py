@@ -111,8 +111,148 @@ class Track(BaseModel):
         return ((x1 + x2) / 2.0, (y1 + y2) / 2.0)
 
     @property
+    def bottom_center(self) -> tuple[float, float]:
+        """Calculates bottom center of bounding box (contact point with ground)."""
+        x1, y1, x2, y2 = self.current_bbox
+        return ((x1 + x2) / 2.0, y2)
+
+    @property
     def dwell_time_sec(self) -> float:
         return max(0.0, self.last_seen_utc - self.first_seen_utc)
+
+
+# =====================================================================
+# Phase 3: Spatial & Temporal Intelligence Models
+# =====================================================================
+
+class ZoneType(str, Enum):
+    MONITORED = "MONITORED"
+    RESTRICTED = "RESTRICTED"
+    ENTRY_EXIT = "ENTRY_EXIT"
+    COMMON_AREA = "COMMON_AREA"
+
+
+class ZoneState(str, Enum):
+    OUTSIDE = "OUTSIDE"
+    ENTERED = "ENTERED"
+    INSIDE = "INSIDE"
+    EXITED = "EXITED"
+
+
+class ZoneEventType(str, Enum):
+    ZONE_ENTER = "ZONE_ENTER"
+    ZONE_EXIT = "ZONE_EXIT"
+    ZONE_INSIDE = "ZONE_INSIDE"
+    RESTRICTED_ZONE_BREACH = "RESTRICTED_ZONE_BREACH"
+
+
+class Zone(BaseModel):
+    """
+    Polygon geometric zone defined within a camera's field of view.
+    Coordinates are specified as a list of (x, y) vertex points.
+    """
+    zone_id: str
+    camera_id: str
+    name: str
+    zone_type: ZoneType = ZoneType.MONITORED
+    polygon: list[tuple[float, float]] = Field(..., min_length=3)
+    enabled: bool = True
+    loitering_threshold_sec: Optional[float] = None  # e.g., 30.0s for restricted areas
+    metadata: dict = Field(default_factory=dict)
+
+
+class ZoneTransition(BaseModel):
+    """
+    Explainable spatial event emitted when a tracked entity enters, dwells, or exits a zone.
+    """
+    event_id: str
+    camera_id: str
+    track_id: int
+    zone_id: str
+    zone_name: str
+    zone_type: ZoneType
+    event_type: ZoneEventType
+    timestamp_utc: float
+    dwell_time_sec: float
+    explanation: str
+
+
+class VirtualLine(BaseModel):
+    """
+    Virtual tripwire line segment for detecting directional crossing.
+    Defined by two endpoints (pt1, pt2) in camera coordinate space.
+    """
+    line_id: str
+    camera_id: str
+    name: str
+    pt1: tuple[float, float]
+    pt2: tuple[float, float]
+    direction_label_in: str = "ENTRY"
+    direction_label_out: str = "EXIT"
+    enabled: bool = True
+
+
+class LineCrossingEvent(BaseModel):
+    """
+    Explainable line crossing event emitted when a track crosses a virtual line.
+    """
+    event_id: str
+    camera_id: str
+    track_id: int
+    line_id: str
+    line_name: str
+    direction: str  # e.g. "ENTRY" or "EXIT"
+    timestamp_utc: float
+    explanation: str
+
+
+class ScheduleTimeWindow(BaseModel):
+    """
+    Permitted operational hours window.
+    Supports overnight schedules across midnight (e.g. 22:00 -> 06:00).
+    """
+    start_time: str = "09:00"  # HH:MM format (24hr)
+    end_time: str = "18:00"    # HH:MM format (24hr)
+    days_of_week: list[int] = Field(default_factory=lambda: [0, 1, 2, 3, 4, 5, 6])  # 0=Monday, 6=Sunday
+    is_overnight: bool = False
+
+
+class OperationalSchedule(BaseModel):
+    """
+    Configurable operating schedule for an institution or camera.
+    """
+    schedule_id: str
+    name: str
+    allowed_windows: list[ScheduleTimeWindow] = Field(default_factory=list)
+    enabled: bool = True
+
+
+class LoiteringEvent(BaseModel):
+    """
+    Explainable temporal event emitted when a person remains in a zone beyond threshold.
+    """
+    event_id: str
+    camera_id: str
+    track_id: int
+    zone_id: str
+    zone_name: str
+    dwell_time_sec: float
+    threshold_sec: float
+    timestamp_utc: float
+    explanation: str
+
+
+class AfterHoursEvent(BaseModel):
+    """
+    Explainable security event emitted when motion/person is observed outside operating hours.
+    """
+    event_id: str
+    camera_id: str
+    track_id: int
+    schedule_id: str
+    observed_time_str: str
+    timestamp_utc: float
+    explanation: str
 
 
 class FramePayload:

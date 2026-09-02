@@ -16,37 +16,33 @@ This subsystem represents **Member 4's core contribution** to the SIH26095 DoSJE
 
 ### 2. Vision, Detection & Tracking (`ai_subsystem/vision/`)
 * **`OpenCVPreprocessor`**: Frame integrity validation, grayscale conversion, and resizing.
-* **`VisualHealthMonitor`**: Real Computer Vision algorithms detecting:
-  * **Black Screen / Lens Occlusion** (Mean intensity $< 15$)
-  * **Severe Low Light** (Mean intensity $< 35$)
-  * **Blur / Lens Out-of-Focus** (Laplacian variance $< 80$)
-  * **Frozen Video Stream** (Inter-frame difference $< 0.1$ across consecutive frames)
-  * **Camera Tampering / Sudden Viewpoint Shift** (Inter-frame difference $> 65$)
+* **`VisualHealthMonitor`**: Real Computer Vision algorithms detecting Black Screen, Low Light, Blur, Frozen Stream, and Camera Tampering.
 * **`FrameSampler`**: Paces video downsampling from native camera FPS down to target AI processing FPS (e.g. 5 FPS).
-* **`YOLOv8Detector`**: Production-ready Ultralytics YOLOv8 inference wrapper.
-  * Model: `yolov8n.pt` (nano weights, lightweight, CPU/GPU compatible).
-  * Extensible target class filtering (e.g. `['person', 'car']`).
-  * Thread-safe pre-warmed inference with latency tracking.
-* **`MultiObjectTracker`**: ByteTrack multi-object tracking implementation.
-  * Persistent integer Track IDs across video frames.
-  * Deterministic state transitions: `NEW` $\rightarrow$ `ACTIVE` $\rightarrow$ `LOST` $\rightarrow$ `EXPIRED` (with `LOST` $\rightarrow$ `ACTIVE` recovery).
-  * History tracking (bounding box trajectory and dwell time).
+* **`YOLOv8Detector`**: Ultralytics YOLOv8 inference wrapper (`yolov8n.pt`).
+* **`MultiObjectTracker`**: In-house ByteTrack two-stage confidence association tracker with lifecycle state machine (`NEW` $\rightarrow$ `ACTIVE` $\rightarrow$ `LOST` $\rightarrow$ `EXPIRED`).
 
-### 3. Concurrency & Multi-Camera Pool (`ai_subsystem/manager/`)
-* **`CameraWorker`**: Isolated thread per camera. If one camera stream disconnects or corrupts, other camera workers continue running without interruption.
-* **`SourceManager`**: Central lifecycle coordinator.
+### 3. Spatial & Temporal Analytics (`ai_subsystem/analytics/`)
+* **`PolygonZoneEngine`**: Point-in-polygon geometry testing for arbitrary convex/concave polygonal zones with contact-point (bottom-center) anchoring.
+  * Supported Zone Types: `MONITORED`, `RESTRICTED`, `ENTRY_EXIT`, `COMMON_AREA`.
+  * Emitted Spatial Events: `ZONE_ENTER`, `ZONE_EXIT`, `ZONE_INSIDE`, `RESTRICTED_ZONE_BREACH`.
+* **`LineCrossingEngine`**: Directional tripwire line segment crossing analysis using 2D cross-product normal vectors with jitter deduplication.
+* **`TemporalEngine`**:
+  * Track dwell time accumulation across zones and camera field of view.
+  * **Loitering Detection**: Detects entities remaining in zones beyond threshold with multi-frame temporal confirmation and duplicate alert suppression.
+  * **After-Hours Security**: Evaluates activity against configured weekly operational schedules (including overnight windows crossing midnight).
 
-### 4. Pipeline Orchestrator (`ai_subsystem/orchestrator.py`)
-* **`AIPipelineOrchestrator`**: Master coordinator routing frames through Ingestion $\rightarrow$ Visual Health $\rightarrow$ Detection $\rightarrow$ Tracking $\rightarrow$ Telemetry.
+### 4. Concurrency & Multi-Camera Pool (`ai_subsystem/manager/`)
+* **`CameraWorker`**: Isolated thread per camera. Decoupled asynchronous producer-consumer pipeline preventing video ingestion backpressure.
+* **`SourceManager`**: Multi-camera lifecycle and fault-isolation coordinator.
 
-### 5. Observability & Telemetry (`ai_subsystem/observability/`)
-* **`MetricsCollector`**: Tracks input FPS, processed FPS, inference latency (ms), active track count, frame drops, and stream health.
+### 5. Pipeline Orchestrator (`ai_subsystem/orchestrator.py`)
+* **`AIPipelineOrchestrator`**: Single integration coordinator: Ingestion $\rightarrow$ Visual Health $\rightarrow$ YOLO Detection $\rightarrow$ ByteTrack Tracking $\rightarrow$ Spatial Polygon Zones $\rightarrow$ Line Crossing $\rightarrow$ Temporal Analytics $\rightarrow$ Telemetry.
 
 ---
 
 ## Running Tests & Standalone Demos
 
-### 1. Run All Automated Tests (Unit + Integration + Smoke)
+### 1. Run All Automated Tests (38 Tests Passing)
 ```bash
 .\venv\Scripts\pytest -v
 ```
@@ -60,4 +56,10 @@ This subsystem represents **Member 4's core contribution** to the SIH26095 DoSJE
 ```bash
 .\venv\Scripts\python run_phase2_demo.py
 ```
-*(Saves annotated detection snapshot to `data/demo_phase2_annotated.jpg`)*
+
+### 4. Run Standalone Phase 3 Demo (Spatial Zones, Tripwire Lines & After-Hours Schedules)
+```bash
+.\venv\Scripts\python run_phase3_demo.py
+```
+*(Saves annotated detection snapshot to `data/demo_phase3_annotated.jpg`)*
+

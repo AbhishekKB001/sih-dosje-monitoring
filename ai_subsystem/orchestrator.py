@@ -6,10 +6,24 @@ Central coordinator routing frames through visual health, preprocessing, detecti
 from typing import Any, Dict, List, Optional
 from ai_subsystem.adapters.event_publisher import BaseEventPublisher, InMemoryEventPublisher
 from ai_subsystem.adapters.storage_adapter import BaseStorageAdapter, LocalStorageAdapter
+from ai_subsystem.analytics.spatial import LineCrossingEngine, PolygonZoneEngine
+from ai_subsystem.analytics.temporal import TemporalEngine
 from ai_subsystem.config import AIConfig, SingleCameraConfig
 from ai_subsystem.manager.source_manager import SourceManager
 from ai_subsystem.observability.metrics import MetricsCollector
-from ai_subsystem.schemas import Detection, FramePayload, StreamEvent, Track, TrackState, VisualHealthResult, VisualHealthState
+from ai_subsystem.schemas import (
+    AfterHoursEvent,
+    Detection,
+    FramePayload,
+    LineCrossingEvent,
+    LoiteringEvent,
+    StreamEvent,
+    Track,
+    TrackState,
+    VisualHealthResult,
+    VisualHealthState,
+    ZoneTransition,
+)
 from ai_subsystem.utils.logger import logger
 from ai_subsystem.vision.detector import BaseObjectDetector, YOLOv8Detector
 from ai_subsystem.vision.preprocessor import OpenCVPreprocessor
@@ -19,7 +33,8 @@ from ai_subsystem.vision.tracker import MultiObjectTracker
 class AIPipelineOrchestrator:
     """
     Master pipeline coordinator.
-    Routes frames through visual health, YOLOv8 object detection, and ByteTrack multi-object tracking.
+    Routes frames through: Ingestion -> Visual Health -> YOLOv8 Detection -> ByteTrack Tracking
+    -> Spatial Polygon & Line Analytics -> Temporal Loitering & After-Hours Intelligence.
     """
 
     def __init__(
@@ -42,8 +57,11 @@ class AIPipelineOrchestrator:
         # Initialize detector (YOLOv8 by default, or injected detector for tests)
         self.detector = detector or YOLOv8Detector(config=self.config.detector)
 
-        # Per-camera tracker instances for clean multi-camera state isolation
+        # Per-camera isolated analytics engines
         self._trackers: Dict[str, MultiObjectTracker] = {}
+        self._zone_engines: Dict[str, PolygonZoneEngine] = {}
+        self._line_engines: Dict[str, LineCrossingEngine] = {}
+        self._temporal_engines: Dict[str, TemporalEngine] = {}
 
         # Initialize multi-camera source manager
         self.source_manager = SourceManager(
@@ -58,14 +76,34 @@ class AIPipelineOrchestrator:
         )
 
     def register_camera(self, camera_cfg: SingleCameraConfig) -> None:
-        """Registers and prepares a camera for processing, creating its dedicated tracker."""
+        """Registers and prepares a camera and its dedicated spatial/temporal engines."""
         self.config.add_camera(camera_cfg)
         self.source_manager.add_camera(camera_cfg)
-        if camera_cfg.camera_id not in self._trackers:
-            self._trackers[camera_cfg.camera_id] = MultiObjectTracker(
-                camera_id=camera_cfg.camera_id,
+        cid = camera_cfg.camera_id
+
+        if cid not in self._trackers:
+            self._trackers[cid] = MultiObjectTracker(
+                camera_id=cid,
                 config=self.config.tracker
             )
+
+        # Initialize Spatial & Temporal Engines
+        self._zone_engines[cid] = PolygonZoneEngine(camera_id=cid, config=camera_cfg.spatial)
+        self._line_engines[cid] = LineCrossingEngine(camera_id=cid, config=camera_cfg.spatial)
+
+        # Match schedule if configured
+        matched_sched = None
+        if camera_cfg.schedule_id:
+            for s in self.config.temporal.schedules:
+                if s.schedule_id == camera_cfg.schedule_id:
+                    matched_sched = s
+                    break
+
+        self._temporal_engines[cid] = TemporalEngine(
+            camera_id=cid,
+            config=self.config.temporal,
+            schedule=matched_sched
+        )
 
     def get_tracker(self, camera_id: str) -> MultiObjectTracker:
         """Retrieves or creates the isolated tracker for a specific camera."""
@@ -75,6 +113,28 @@ class AIPipelineOrchestrator:
                 config=self.config.tracker
             )
         return self._trackers[camera_id]
+
+    def get_zone_engine(self, camera_id: str) -> PolygonZoneEngine:
+        """Retrieves or creates the isolated zone engine for a specific camera."""
+        if camera_id not in self._zone_engines:
+            cam_cfg = self.config.get_camera(camera_id)
+            spatial_cfg = cam_cfg.spatial if cam_cfg else self.config.spatial
+            self._zone_engines[camera_id] = PolygonZoneEngine(camera_id=camera_id, config=spatial_cfg)
+        return self._zone_engines[camera_id]
+
+    def get_line_engine(self, camera_id: str) -> LineCrossingEngine:
+        """Retrieves or creates the isolated line engine for a specific camera."""
+        if camera_id not in self._line_engines:
+            cam_cfg = self.config.get_camera(camera_id)
+            spatial_cfg = cam_cfg.spatial if cam_cfg else self.config.spatial
+            self._line_engines[camera_id] = LineCrossingEngine(camera_id=camera_id, config=spatial_cfg)
+        return self._line_engines[camera_id]
+
+    def get_temporal_engine(self, camera_id: str) -> TemporalEngine:
+        """Retrieves or creates the isolated temporal engine for a specific camera."""
+        if camera_id not in self._temporal_engines:
+            self._temporal_engines[camera_id] = TemporalEngine(camera_id=camera_id, config=self.config.temporal)
+        return self._temporal_engines[camera_id]
 
     def start(self) -> None:
         """Starts stream ingestion across all configured cameras."""
@@ -91,7 +151,8 @@ class AIPipelineOrchestrator:
     def process_frame(self, frame_payload: FramePayload, health_result: VisualHealthResult) -> Dict[str, Any]:
         """
         Main execution pipeline for a sampled frame.
-        Coordinates: Ingestion -> Visual Health -> Preprocessing -> Detection -> Tracking -> (Phase 3-5).
+        Coordinates: Ingestion -> Visual Health -> Preprocessing -> Detection -> Tracking
+        -> Spatial Polygon Zones -> Virtual Line Crossing -> Temporal Loitering & After-Hours.
         """
         camera_id = frame_payload.camera_id
         
@@ -109,7 +170,11 @@ class AIPipelineOrchestrator:
                 "health_state": health_result.state.value,
                 "reason": health_result.fault_reason,
                 "detections": [],
-                "active_tracks": []
+                "active_tracks": [],
+                "zone_events": [],
+                "line_events": [],
+                "loitering_events": [],
+                "after_hours_events": []
             }
 
         # 3. Object Detection (YOLOv8)
@@ -125,7 +190,29 @@ class AIPipelineOrchestrator:
             tracks = tracker.update(detections, frame_payload.timestamp_utc)
             active_tracks = [t for t in tracks if t.state == TrackState.ACTIVE]
 
-        # 5. Record Telemetry & Metrics
+        # 5. Spatial Analytics: Polygon Zones & Line Crossing
+        zone_events: List[ZoneTransition] = []
+        line_events: List[LineCrossingEvent] = []
+        zone_engine = self.get_zone_engine(camera_id)
+        line_engine = self.get_line_engine(camera_id)
+        
+        if active_tracks:
+            zone_events = zone_engine.update(active_tracks, frame_payload.timestamp_utc)
+            line_events = line_engine.update(active_tracks, frame_payload.timestamp_utc)
+
+        # 6. Temporal Analytics: Dwell Time, Loitering & After-Hours
+        loitering_events: List[LoiteringEvent] = []
+        after_hours_events: List[AfterHoursEvent] = []
+        temporal_engine = self.get_temporal_engine(camera_id)
+
+        if active_tracks:
+            loitering_events, after_hours_events = temporal_engine.update(
+                tracks=active_tracks,
+                zone_engine=zone_engine,
+                timestamp_utc=frame_payload.timestamp_utc
+            )
+
+        # 7. Record Telemetry & Metrics
         self.metrics.record_inference_metrics(
             camera_id=camera_id,
             latency_ms=self.detector.last_inference_latency_ms,
@@ -146,6 +233,10 @@ class AIPipelineOrchestrator:
             "detections": [d.model_dump() for d in detections],
             "active_tracks": [t.model_dump() for t in active_tracks],
             "active_tracks_count": len(active_tracks),
+            "zone_events": [e.model_dump() for e in zone_events],
+            "line_events": [e.model_dump() for e in line_events],
+            "loitering_events": [e.model_dump() for e in loitering_events],
+            "after_hours_events": [e.model_dump() for e in after_hours_events],
             "inference_latency_ms": self.detector.last_inference_latency_ms
         }
 

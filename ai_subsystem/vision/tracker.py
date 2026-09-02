@@ -107,7 +107,7 @@ class MultiObjectTracker:
         Returns:
             List of all currently existing Tracks (NEW, ACTIVE, and LOST).
         """
-        now_ts = timestamp_utc or time.time()
+        now_ts = timestamp_utc if timestamp_utc is not None else time.time()
         
         # 1. Split detections into high-confidence and low-confidence pools (ByteTrack philosophy)
         high_dets: List[Detection] = []

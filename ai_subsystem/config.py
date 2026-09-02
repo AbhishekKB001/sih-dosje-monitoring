@@ -6,6 +6,7 @@ Provides versioned, strictly typed, and validated configuration models.
 from enum import Enum
 from typing import Dict, List, Optional
 from pydantic import BaseModel, Field, field_validator
+from ai_subsystem.schemas import OperationalSchedule, VirtualLine, Zone
 
 
 class SourceType(str, Enum):
@@ -72,6 +73,29 @@ class TrackerConfig(BaseModel):
     max_history_length: int = Field(default=50, ge=5, description="Max bounding box / trajectory positions retained in memory")
 
 
+class SpatialConfig(BaseModel):
+    """Configuration for spatial polygon zones and virtual tripwire lines."""
+    zones: List[Zone] = Field(default_factory=list, description="Configured polygon zones")
+    lines: List[VirtualLine] = Field(default_factory=list, description="Configured virtual tripwire lines")
+    bottom_center_anchoring: bool = Field(
+        default=True,
+        description="Use bounding box bottom-center point (feet contact) rather than centroid for zone containment"
+    )
+
+
+class TemporalConfig(BaseModel):
+    """Configuration for temporal analytics, loitering, and operating schedules."""
+    default_loitering_threshold_sec: float = Field(
+        default=30.0, ge=1.0, description="Default time in zone before loitering event is raised"
+    )
+    loitering_confirmation_frames: int = Field(
+        default=3, ge=1, description="Consecutive frames track must remain in zone to confirm loitering"
+    )
+    schedules: List[OperationalSchedule] = Field(
+        default_factory=list, description="Registered operational schedules for institutions/cameras"
+    )
+
+
 class SingleCameraConfig(BaseModel):
     """Configuration for an individual camera stream source."""
     camera_id: str = Field(..., description="Unique camera identifier, e.g. CAM-001")
@@ -83,6 +107,8 @@ class SingleCameraConfig(BaseModel):
     reconnect_delay_sec: float = Field(default=2.0, ge=0.1, description="Initial delay between reconnection attempts")
     max_reconnect_delay_sec: float = Field(default=30.0, ge=1.0, description="Max exponential backoff delay")
     enabled: bool = Field(default=True, description="Whether this camera is active")
+    spatial: SpatialConfig = Field(default_factory=SpatialConfig, description="Camera-specific zones and lines")
+    schedule_id: Optional[str] = Field(default=None, description="Optional operational schedule ID for after-hours checks")
 
 
 class AIConfig(BaseModel):
@@ -94,6 +120,8 @@ class AIConfig(BaseModel):
     sampling: SamplingConfig = Field(default_factory=SamplingConfig)
     detector: DetectorConfig = Field(default_factory=DetectorConfig)
     tracker: TrackerConfig = Field(default_factory=TrackerConfig)
+    spatial: SpatialConfig = Field(default_factory=SpatialConfig)
+    temporal: TemporalConfig = Field(default_factory=TemporalConfig)
     
     cameras: Dict[str, SingleCameraConfig] = Field(
         default_factory=dict,
@@ -108,8 +136,9 @@ class AIConfig(BaseModel):
                 raise ValueError(f"Key '{cid}' does not match camera_id '{cfg.camera_id}'")
         return v
 
-    def add_camera(self, camera_cfg: SingleCameraConfig) -> None:
-        self.cameras[camera_cfg.camera_id] = camera_cfg
+    def add_camera(self, cam_cfg: SingleCameraConfig) -> None:
+        """Helper to register or update a single camera configuration."""
+        self.cameras[cam_cfg.camera_id] = cam_cfg
 
     def get_camera(self, camera_id: str) -> Optional[SingleCameraConfig]:
         return self.cameras.get(camera_id)
