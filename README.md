@@ -4,6 +4,8 @@
 
 ![Flutter](https://img.shields.io/badge/Flutter-3.47.2-02569B?style=for-the-badge&logo=flutter&logoColor=white)
 ![Dart](https://img.shields.io/badge/Dart-3.13.2-0175C2?style=for-the-badge&logo=dart&logoColor=white)
+![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white)
+![AI Subsystem](https://img.shields.io/badge/AI%20Vision-YOLO%20%7C%20DeepSORT-FF6F00?style=for-the-badge)
 ![GovTech](https://img.shields.io/badge/Smart%20Governance-DoSJE-FF9933?style=for-the-badge)
 ![License](https://img.shields.io/badge/License-MIT-138808?style=for-the-badge)
 
@@ -33,7 +35,7 @@ The app features an instant **Role-Switcher** in the top bar to evaluate feature
 
 ---
 
-## ✨ Core Features & Screenshots
+## ✨ Mobile Features & Modules
 
 ### 1. 🔐 Multi-Tier Authentication & Security
 - Single Sign-On (SSO) with auto-filled credentials for testing.
@@ -84,65 +86,63 @@ The app features an instant **Role-Switcher** in the top bar to evaluate feature
 
 ---
 
-## 🏗️ Architecture & Project Structure
+## 🧠 AI Subsystem & Vision Intelligence
+Located in [`ai_subsystem/`](./ai_subsystem/):
+- **Vision Pipeline**: YOLO detection, DeepSORT tracking, and visual health monitoring (lens obstruction, glare, blackout).
+- **Spatial & Temporal Analytics**: Polygon restricted zones, loitering detection, and schedule compliance.
+- **Crowd & Occupancy Analytics**: Real-time room occupancy and non-biometric attendance consistency auditing.
+- **Mobile API Contract**: REST and SSE endpoints defined in [`docs/FLUTTER_INTEGRATION_CONTRACT.md`](./docs/FLUTTER_INTEGRATION_CONTRACT.md).
 
-Clean **MVVM (Model-View-ViewModel)** architecture:
+---
+
+## 🏗️ Project Structure
 
 ```
-lib/
-├── core/
-│   ├── constants/        # AppColors, AppStrings, MockData
-│   └── theme/            # Material 3 Gov Theme with Tri-color accents
-├── data/
-│   ├── models/           # UserModel, InstituteModel, CCTVFeedModel, InspectionDutyModel, AnomalyModel, NotificationModel
-│   └── repositories/     # AuthRepository, CCTVRepository, InspectionRepository, NotificationRepository
-├── viewmodels/           # AuthViewModel, DashboardViewModel, CCTVViewModel, InspectionViewModel, VideoCallViewModel, NotificationViewModel
-├── widgets/              # CustomAppBar, StatMetricCard, LiveCCTVCard, GeofenceStatusCard
-└── views/
-    ├── auth/             # SplashScreen, RoleSelectionScreen, LoginScreen, MpinBiometricScreen
-    ├── dashboard/        # MainNavigationScreen, OfficialDashboardView, InspectorDashboardView, InstituteDashboardView
-    ├── cctv/             # CCTVGridView, CCTVPlayerView (PTZ + Evidence Snapshots)
-    ├── inspection/       # InspectionDutyListView, InspectionDetailView, InspectionFormWizardView, InspectionReportView
-    ├── video_call/       # RandomVcScreen (Dual stream WebRTC simulation)
-    ├── analytics/        # AnomalyAlertsView (AI alerts, tampering, proxy attendance)
-    ├── notifications/    # NotificationCenterView (Urgent badges & deep-linking)
-    └── profile/          # ProfileView (Digital ID card, role-switcher, preferences)
+├── ai_subsystem/         # Python AI & Computer Vision Subsystem
+├── docs/                 # Architectural specifications & mobile API contracts
+├── lib/                  # Flutter Mobile Application
+│   ├── core/             # Colors, Theme, Strings, Mock Data
+│   ├── data/             # Models & Repositories
+│   ├── viewmodels/       # MVVM State ViewModels (Provider)
+│   ├── views/            # Auth, Dashboard, CCTV, Inspections, VC, Analytics
+│   └── widgets/          # Custom Cards, HUDs, Geofence Widgets
+├── tests/                # AI subsystem unit & integration tests
+└── test/                 # Flutter mobile widget & unit tests
 ```
 
 ---
 
 ## 🚀 Getting Started
 
-### Prerequisites
-- [Flutter SDK](https://flutter.dev/docs/get-started/install) (v3.22.0 or higher)
-- Dart SDK (v3.4.0 or higher)
-
-### Setup & Run
+### 📱 Running the Flutter Mobile App
 ```bash
-# 1. Clone this repository
-git clone https://github.com/<your-username>/<your-repo-name>.git
-cd sih
-
-# 2. Get dependencies
+# 1. Install dependencies
 flutter pub get
 
-# 3. Run automated test suite
+# 2. Run automated test suite
 flutter test
 
-# 4. Launch the application
-# On Chrome (Web):
-flutter run -d chrome
+# 3. Launch the app
+flutter run -d chrome     # Run on Web
+# or
+flutter run -d windows    # Run on Windows Desktop
+```
 
-# On Windows Desktop:
-flutter run -d windows
+### 🧠 Running the AI Subsystem
+```bash
+# 1. Install python dependencies
+pip install -r requirements.txt
+
+# 2. Run integration demo
+python run_phase6_integration_demo.py
 ```
 
 ---
 
 ## 🧪 Quality & Test Coverage
-- **Static Analysis**: `flutter analyze` passes with **0 errors, 0 warnings**.
-- **Automated Tests**: Comprehensive unit and widget tests covering auth role-switching, geofence arrival calculation, dashboard metrics, and UI rendering.
-- **Production Build**: Verified with `flutter build web`.
+- **Flutter Static Analysis**: `flutter analyze` passes with **0 errors, 0 warnings**.
+- **Flutter Automated Tests**: 4/4 test suites passed.
+- **Production Web Build**: Verified with `flutter build web`.
 
 ---
 
