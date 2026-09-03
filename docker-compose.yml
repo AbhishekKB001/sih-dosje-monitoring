@@ -1,0 +1,24 @@
+version: "3.8"
+
+services:
+  member4-ai:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sih2026_member4_ai
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+      - ./evidence_store:/app/evidence_store
+    environment:
+      - AI_CONFIG_VERSION=cfg-2026.1
+      - AI_MODEL_VERSION=v1.0.0
+      - AI_HOST=0.0.0.0
+      - AI_PORT=8000
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
