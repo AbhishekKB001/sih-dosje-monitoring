@@ -1,0 +1,76 @@
+version: '3.8'
+
+services:
+  # MediaMTX Media Server (RTSP -> HLS / WebRTC)
+  mediamtx:
+    image: bluenviron/mediamtx:latest
+    container_name: sih-mediamtx
+    restart: unless-stopped
+    ports:
+      - "8554:8554" # RTSP TCP/UDP
+      - "1935:1935" # RTMP
+      - "8888:8888" # HLS (HTTP)
+      - "8889:8889" # WebRTC WHEP (HTTP)
+      - "8189:8189/udp" # WebRTC ICE UDP
+      - "9997:9997" # MediaMTX Control API
+    volumes:
+      - ./media-server/mediamtx.yml:/mediamtx.yml
+
+  # Coturn TURN/STUN Server (Production WebRTC NAT traversal)
+  coturn:
+    image: coturn/coturn:latest
+    container_name: sih-coturn
+    restart: unless-stopped
+    ports:
+      - "3478:3478"
+      - "3478:3478/udp"
+      - "5349:5349"
+      - "5349:5349/udp"
+      - "49152-49200:49152-49200/udp"
+    command:
+      - -n
+      - --log-file=stdout
+      - --listening-port=3478
+      - --min-port=49152
+      - --max-port=49200
+      - --realm=sih-inspection.internal
+      - --user=sih_turn_user:sih_turn_secret_token
+      - --lt-cred-mech
+
+  # Backend Service (Node.js, Express, Socket.IO, Prisma)
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: sih-backend
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      - PORT=5000
+      - DATABASE_URL=file:./dev.db
+      - MEDIA_SERVER_HOST=mediamtx
+      - MEDIAMTX_API_URL=http://mediamtx:9997
+      - MEDIAMTX_RTSP_PORT=8554
+      - MEDIAMTX_HLS_PORT=8888
+      - MEDIAMTX_WEBRTC_PORT=8889
+      - STUN_SERVER_URL=stun:stun.l.google.com:19302
+      - TURN_SERVER_URL=turn:coturn:3478
+      - TURN_USERNAME=sih_turn_user
+      - TURN_PASSWORD=sih_turn_secret_token
+      - CORS_ORIGIN=*
+    depends_on:
+      - mediamtx
+      - coturn
+
+  # Frontend Dashboard (Vite + React)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: sih-frontend
+    restart: unless-stopped
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
