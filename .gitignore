@@ -126,3 +126,14 @@ app.*.map.json
 !**/ios/**/default.perspectivev3
 !/packages/flutter_tools/test/data/dart_dependencies_test/**/.packages
 !/dev/ci/**/Gemfile.lock
+
+# Node & Web Apps
+node_modules/
+**/node_modules/
+dist/
+**/dist/
+*.db
+*.db-journal
+backend/dev.db*
+backend/prisma/dev.db*
+.env
