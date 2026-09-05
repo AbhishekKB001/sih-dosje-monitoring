@@ -4,14 +4,8 @@
 *.log
 *.pyc
 *.swp
-.DS_Store
-.atom/
-.build/
 .buildlog/
 .history
-.svn/
-.swiftpm/
-migrate_working_dir/
 
 # Python & AI Subsystem
 venv/
@@ -27,30 +21,42 @@ backend/data/
 weights/
 runs/
 
-# IntelliJ / IDE related
-*.iml
-*.ipr
-*.iws
-.idea/
-.vscode/
+# Flutter repo-specific
+/bin/cache/
+/bin/internal/bootstrap.bat
+/bin/internal/bootstrap.sh
+/bin/mingit/
+/dev/benchmarks/mega_gallery/
+/dev/bots/.recipe_deps
+/dev/bots/android_tools/
+/dev/devicelab/ABresults*.json
+/dev/docs/doc/
+/dev/docs/flutter.docs.zip
+/dev/docs/lib/
+/dev/docs/pubspec.yaml
+/dev/integration_tests/**/xcuserdata
+/dev/integration_tests/**/Pods
+/packages/flutter/coverage/
+version
+analysis_benchmark.json
 
-# Flutter / Dart / Pub related
+# packages file containing multi-root paths
+.packages.generated
+
+# Flutter/Dart/Pub related
 **/doc/api/
 .dart_tool/
 .flutter-plugins
 .flutter-plugins-dependencies
 **/generated_plugin_registrant.dart
 .packages
-.packages.generated
 .pub-preload-cache/
 .pub/
 build/
-/build/
 flutter_*.png
 linked_*.ds
 unlinked.ds
 unlinked_spec.ds
-/coverage/
 
 # Android related
 **/android/**/gradle-wrapper.jar
@@ -62,11 +68,8 @@ unlinked_spec.ds
 **/android/**/GeneratedPluginRegistrant.java
 **/android/key.properties
 *.jks
-/android/app/debug
-/android/app/profile
-/android/app/release
 
-# iOS / Xcode related
+# iOS/XCode related
 **/ios/**/*.mode1v3
 **/ios/**/*.mode2v3
 **/ios/**/*.moved-aside
@@ -111,23 +114,29 @@ unlinked_spec.ds
 # Linux
 **/linux/flutter/generated_plugin_registrant.cc
 **/linux/flutter/generated_plugin_registrant.h
-**/linux/flutter/generated_plugins.cmake
+**/linux/flutter/generated_plugin_registrant.cmake
 
-# Widget Preview & Coverage
-.widget_preview/
+# Coverage
 coverage/
 
-# Symbols & Obfuscation
+# Symbols
 app.*.symbols
-app.*.map.json
 
-# Exceptions
+# Exceptions to above rules.
 !**/ios/**/default.mode1v3
 !**/ios/**/default.mode2v3
 !**/ios/**/default.pbxuser
 !**/ios/**/default.perspectivev3
 !/packages/flutter_tools/test/data/dart_dependencies_test/**/.packages
 !/dev/ci/**/Gemfile.lock
+
+# AI backend (untracked redundant implementation)
+ai-backend/
+ai-backend/venv/
+
+# Archives
+*.zip
+zip/
 
 # Node & Web Apps
 node_modules/
@@ -138,4 +147,18 @@ dist/
 *.db-journal
 backend/dev.db*
 backend/prisma/dev.db*
+
+# Environment Secrets
 .env
+.env.*
+*.env
+cctv/.env
+backend/.env
+admin-web/.env
+ai_subsystem/.env
+!.env.example
+!*.env.example
+!backend/.env.example
+!admin-web/.env.example
+!cctv/.env.example
+!ai_subsystem/.env.example
