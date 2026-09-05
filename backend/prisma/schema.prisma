@@ -1,0 +1,264 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  ADMIN
+  INSPECTOR
+  PROJECT_INCHARGE
+  STAFF
+  VIEWER
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
+enum ProjectStatus {
+  ACTIVE
+  INACTIVE
+  COMPLETED
+  SUSPENDED
+}
+
+enum CameraType {
+  CCTV
+  IP_CAMERA
+  PTZ
+  OTHER
+}
+
+enum CameraStatus {
+  ONLINE
+  OFFLINE
+  MAINTENANCE
+}
+
+enum InspectionType {
+  ROUTINE
+  SURPRISE
+  SPECIAL
+  REMOTE
+}
+
+enum InspectionStatus {
+  ASSIGNED
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum AlertRisk {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum AlertStatus {
+  ACTIVE
+  ACKNOWLEDGED
+  RESOLVED
+  DISMISSED
+}
+
+enum NotificationType {
+  INFO
+  ALERT
+  INSPECTION
+  SYSTEM
+}
+
+model User {
+  id           Int        @id @default(autoincrement())
+  name         String
+  email        String     @unique
+  phone        String?
+  passwordHash String
+  role         Role       @default(VIEWER)
+  status       UserStatus @default(ACTIVE)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  inspections       Inspection[]  @relation("InspectorInspections")
+  notifications     Notification[]
+  auditLogs         AuditLog[]
+  uploadedFiles     FileMetadata[]
+  createdProjects   Project[]     @relation("ProjectCreator")
+  createdAlerts     Alert[]       @relation("AlertCreator")
+}
+
+model Project {
+  id              Int           @id @default(autoincrement())
+  projectCode     String        @unique
+  name            String
+  scheme          String
+  organizationName String
+  institutionType String?
+  address         String?
+  district        String
+  state           String
+  contactPerson   String?
+  contactNumber   String?
+  status          ProjectStatus @default(ACTIVE)
+  latitude        Float?
+  longitude       Float?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  createdById     Int?
+
+  createdBy       User?          @relation("ProjectCreator", fields: [createdById], references: [id])
+  cameras         Camera[]
+  inspections     Inspection[]
+  alerts          Alert[]
+  notifications   Notification[]
+  auditLogs       AuditLog[]
+}
+
+model Camera {
+  id          Int          @id @default(autoincrement())
+  cameraCode  String       @unique
+  projectId   Int
+  name        String
+  location    String?
+  streamUrl   String?
+  streamId    String?
+  type        CameraType   @default(CCTV)
+  status      CameraStatus @default(OFFLINE)
+  lastActive  DateTime?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  project      Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  detections   AIDetection[]
+  alerts       Alert[]
+}
+
+model AIDetection {
+  id          Int      @id @default(autoincrement())
+  cameraId    Int
+  detectedAt  DateTime @default(now())
+  objects     Json
+  confidence  Float?
+  createdAt   DateTime @default(now())
+
+  camera Camera @relation(fields: [cameraId], references: [id], onDelete: Cascade)
+  alerts Alert[]
+}
+
+model Alert {
+  id            Int         @id @default(autoincrement())
+  alertCode     String      @unique
+  projectId     Int
+  cameraId      Int?
+  aiDetectionId Int?
+  title         String
+  description   String?
+  riskLevel     AlertRisk   @default(MEDIUM)
+  status        AlertStatus @default(ACTIVE)
+  createdById   Int?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  resolvedAt    DateTime?
+
+  project     Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  camera      Camera?      @relation(fields: [cameraId], references: [id], onDelete: SetNull)
+  detection   AIDetection? @relation(fields: [aiDetectionId], references: [id], onDelete: SetNull)
+  createdBy   User?        @relation("AlertCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  notifications Notification[]
+}
+
+model Inspection {
+  id            Int              @id @default(autoincrement())
+  projectId     Int
+  inspectorId   Int
+  type          InspectionType
+  scheduledDate DateTime?
+  status        InspectionStatus @default(ASSIGNED)
+  remarks       String?
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+  completedAt   DateTime?
+
+  project       Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  inspector     User             @relation("InspectorInspections", fields: [inspectorId], references: [id])
+  report        InspectionReport?
+  files         FileMetadata[]
+  vcSessions    VCSession[]
+}
+
+model InspectionReport {
+  id            Int      @id @default(autoincrement())
+  inspectionId  Int      @unique
+  findings      String?
+  recommendations String?
+  submittedAt   DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  inspection Inspection @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+}
+
+model VCSession {
+  id           Int       @id @default(autoincrement())
+  inspectionId Int
+  meetingId    String?
+  meetingUrl   String?
+  startedAt    DateTime?
+  endedAt      DateTime?
+  status       String    @default("SCHEDULED")
+  createdAt    DateTime  @default(now())
+
+  inspection Inspection @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+}
+
+model Notification {
+  id         Int              @id @default(autoincrement())
+  userId     Int
+  title      String
+  message    String
+  type       NotificationType @default(INFO)
+  projectId  Int?
+  alertId    Int?
+  isRead     Boolean          @default(false)
+  createdAt  DateTime         @default(now())
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  alert   Alert?   @relation(fields: [alertId], references: [id], onDelete: SetNull)
+}
+
+model AuditLog {
+  id        Int      @id @default(autoincrement())
+  userId    Int?
+  projectId Int?
+  action    String
+  details   Json?
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  user    User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+}
+
+model FileMetadata {
+  id           Int      @id @default(autoincrement())
+  inspectionId Int
+  fileName     String
+  fileType     String?
+  filePath     String?
+  storageId    String?
+  uploadedById Int?
+  createdAt    DateTime @default(now())
+
+  inspection Inspection @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+  uploadedBy User?       @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
+}
