@@ -1,8 +1,10 @@
 import '../models/user_model.dart';
+import '../services/api_service.dart';
 import '../../core/constants/mock_data.dart';
 
 class AuthRepository {
   UserModel _currentUser = MockData.officialUser;
+  final ApiService _api = ApiService();
 
   UserModel get currentUser => _currentUser;
 
@@ -11,8 +13,16 @@ class AuthRepository {
     required String password,
     required UserRole role,
   }) async {
-    // Simulate network latency
-    await Future.delayed(const Duration(milliseconds: 500));
+    final liveUser = await _api.login(
+      emailOrPhone: emailOrPhone,
+      password: password,
+      role: role,
+    );
+
+    if (liveUser != null) {
+      _currentUser = liveUser;
+      return _currentUser;
+    }
 
     switch (role) {
       case UserRole.official:
@@ -32,7 +42,12 @@ class AuthRepository {
     required String pin,
     required UserRole role,
   }) async {
-    await Future.delayed(const Duration(milliseconds: 400));
+    final liveUser = await _api.verifyMpin(pin: pin, role: role);
+    if (liveUser != null) {
+      _currentUser = liveUser;
+      return _currentUser;
+    }
+
     switch (role) {
       case UserRole.official:
         _currentUser = MockData.officialUser;
@@ -62,6 +77,7 @@ class AuthRepository {
   }
 
   Future<void> logout() async {
-    await Future.delayed(const Duration(milliseconds: 200));
+    _api.authToken = null;
+    await Future.delayed(const Duration(milliseconds: 100));
   }
 }

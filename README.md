@@ -2,149 +2,153 @@
 ### Centralized Surveillance, Surprise Inspections & Real-time Institutional Monitoring Portal
 **Ministry of Social Justice and Empowerment (DoSJE), Government of India**
 
-![Flutter](https://img.shields.io/badge/Flutter-3.47.2-02569B?style=for-the-badge&logo=flutter&logoColor=white)
-![Dart](https://img.shields.io/badge/Dart-3.13.2-0175C2?style=for-the-badge&logo=dart&logoColor=white)
+![Node.js](https://img.shields.io/badge/Node.js-20+-339933?style=for-the-badge&logo=nodedotjs&logoColor=white)
+![Express](https://img.shields.io/badge/Express-4.19-000000?style=for-the-badge&logo=express&logoColor=white)
+![Prisma](https://img.shields.io/badge/Prisma-5.22-2D3748?style=for-the-badge&logo=prisma&logoColor=white)
+![React](https://img.shields.io/badge/React-18-61DAFB?style=for-the-badge&logo=react&logoColor=black)
+![Vite](https://img.shields.io/badge/Vite-6.0-646CFF?style=for-the-badge&logo=vite&logoColor=white)
+![Flutter](https://img.shields.io/badge/Flutter-3.47-02569B?style=for-the-badge&logo=flutter&logoColor=white)
 ![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white)
-![AI Subsystem](https://img.shields.io/badge/AI%20Vision-YOLO%20%7C%20DeepSORT-FF6F00?style=for-the-badge)
-![GovTech](https://img.shields.io/badge/Smart%20Governance-DoSJE-FF9933?style=for-the-badge)
-![License](https://img.shields.io/badge/License-MIT-138808?style=for-the-badge)
+![AI Vision](https://img.shields.io/badge/AI%20Vision-YOLO%20%7C%20DeepSORT-FF6F00?style=for-the-badge)
+![Smart Governance](https://img.shields.io/badge/Smart%20Governance-DoSJE-FF9933?style=for-the-badge)
 
 ---
 
-## 📌 Problem Statement Overview
-Development of a centralized mobile application for real-time monitoring, surprise inspections, CCTV surveillance integration, and random inspection assignment for projects/institutes/NGOs running under Department of Social Justice and Empowerment (DoSJE) schemes.
-
-### 🎯 Key Objectives:
-- **Zero Proxy Reporting**: Eliminate fake attendance, ghost beneficiaries, and proxy operations through real-time biometric and CCTV validation.
-- **Automated Random Audits**: Eliminate bias with AI-driven surprise inspection duties allocated based on telemetry risk scores.
-- **Mandatory On-site Geofencing**: Inspection forms remain cryptographically locked until the inspector is within **100 meters** of the institutional GPS coordinates.
-- **Tamper-Evident Live Capture**: Gate photos and evidence snapshots are cryptographically watermarked with exact GPS coordinates, IST timestamp, and SHA-256 integrity hash.
-- **Surprise Video Calls (VC)**: Real-time dual-feed video conferencing to verify classrooms and incharge availability on demand.
-
----
-
-## 👥 Supported Stakeholder Personas
-
-The app features an instant **Role-Switcher** in the top bar to evaluate features from each perspective:
-
-| Role | Responsibilities & In-App Capabilities |
-| :--- | :--- |
-| **DoSJE Official (HQ Admin)** | National/State dashboard, scheme filtering (SMILE, PM-DAKSH, etc.), multi-stream CCTV grid, AI anomaly ticker, random surprise duty generator, surprise VC dialer. |
-| **PMU Inspection Officer** | Assigned surprise inspection queue, GPS geofence arrival unlock, 5-step field audit wizard, live watermarked photo capture, digital sign-off. |
-| **Institute / NGO Incharge** | CCTV camera operational health, daily biometric punch tally, statutory checklist, and surprise VC standby status. |
-
----
-
-## ✨ Mobile Features & Modules
-
-### 1. 🔐 Multi-Tier Authentication & Security
-- Single Sign-On (SSO) with auto-filled credentials for testing.
-- Custom 4-digit **MPIN Keypad**.
-- Simulated **Biometric Authentication** (Fingerprint / Face ID).
-- Government security advisories and IT Act compliance notices.
-
-### 2. 📊 Real-Time Monitoring Dashboard
-- **Scheme Filtering**: Filter by *SMILE*, *PM-DAKSH*, *Nasha Mukt Bharat*, *Senior Citizen Welfare Homes*, *Divyangjan Rehabilitation*.
-- **KPI Metrics**: Real-time counters for Total Institutes, Active/Offline CCTVs, Surprise Audits, and Critical AI Anomalies.
-- **1-Click AI Duty Assigner**: Risk scoring algorithm that analyzes offline cameras, attendance discrepancies, and compliance history to trigger surprise duties.
-
-### 3. 📹 Live CCTV Surveillance Hub & Interactive PTZ Player
-- **Stream Grid**: Filter feeds by location (*Main Gate*, *Classroom*, *Dining Hall*, *Dormitory*, *Office*).
-- **Realistic HUD**: Animated blinking `REC` indicator, live timestamp, FPS counter, and resolution.
-- **PTZ Controls**: Pan / Tilt directional joystick simulator and Zoom (`1.0x` - `4.0x`).
-- **Cryptographic Evidence Capture**: Instant watermarked snapshots timestamped with anti-tamper stamps.
-- **Stream Recovery**: Real-time ping/reconnection for obstructed or offline cameras.
-
-### 4. 📋 Surprise Inspection Module (PMU Teams)
-- **Geofence Proximity Lock**: Form remains locked until GPS proves distance $\le$ 100m. Includes a *"Simulate On-Site Arrival"* button for live jury demo.
-- **5-Step Inspection Form Wizard**:
-  1. **Arrival Proof**: Live gate photo with GPS coordinate watermark and hash.
-  2. **Infrastructure & Sanitation**: Hygiene, dormitory, food, and fire safety checklist.
-  3. **Beneficiary Headcount Audit**: Slider comparing registered vs present beneficiaries to catch proxy claims.
-  4. **CCTV & Logbook Audit**: Verification of NVR hardware, 30-day storage, and biometric registers.
-  5. **Score & Digital Sign-off**: Star compliance score, remarks, and digital signature canvas.
-- **Signed Audit Report Preview**: Official government certificate format with simulated PDF download.
-
-### 5. 📞 Random Video Conferencing (VC) Module
-- One-tap surprise video connection with Institute Incharge or classrooms.
-- Dual-feed WebRTC UI (main stream + Picture-in-Picture).
-- In-call controls (Mute, Video toggle, Camera flip, Duration timer).
-- **In-Call Snapshot Evidence**: Watermarked capture directly from active call session.
-
-### 6. 🚨 AI Anomaly & Attendance Analytics
-- Automated anomaly detection for:
-  - Camera tampering / blackout
-  - Proxy biometric punch-ins
-  - Headcount mismatch between portal and CCTV
-  - Unauthorized supervisory staff absence
-- Severity filters: *Critical*, *Warning*, *Info*.
-
-### 7. 🔔 Notification Hub & Digital ID
-- Categorized push alerts (*Critical*, *Inspection*, *CCTV*, *Compliance*).
-- Officer digital ID badge with employee code, designation, and QR code verification.
-- Offline-first draft synchronization indicator.
-
----
-
-## 🧠 AI Subsystem & Vision Intelligence
-Located in [`ai_subsystem/`](./ai_subsystem/):
-- **Vision Pipeline**: YOLO detection, DeepSORT tracking, and visual health monitoring (lens obstruction, glare, blackout).
-- **Spatial & Temporal Analytics**: Polygon restricted zones, loitering detection, and schedule compliance.
-- **Crowd & Occupancy Analytics**: Real-time room occupancy and non-biometric attendance consistency auditing.
-- **Mobile API Contract**: REST and SSE endpoints defined in [`docs/FLUTTER_INTEGRATION_CONTRACT.md`](./docs/FLUTTER_INTEGRATION_CONTRACT.md).
-
----
-
-## 🏗️ Project Structure
+## 🏛️ System Architecture
 
 ```
-├── ai_subsystem/         # Python AI & Computer Vision Subsystem
-├── docs/                 # Architectural specifications & mobile API contracts
-├── lib/                  # Flutter Mobile Application
-│   ├── core/             # Colors, Theme, Strings, Mock Data
-│   ├── data/             # Models & Repositories
-│   ├── viewmodels/       # MVVM State ViewModels (Provider)
-│   ├── views/            # Auth, Dashboard, CCTV, Inspections, VC, Analytics
-│   └── widgets/          # Custom Cards, HUDs, Geofence Widgets
-├── tests/                # AI subsystem unit & integration tests
-└── test/                 # Flutter mobile widget & unit tests
+                             DOSJE DRISHTI PLATFORM
+                                        │
+             ┌──────────────────────────┴──────────────────────────┐
+             │                                                     │
+       📱 Flutter App                                        💻 React Web
+   (PMU Inspector & Admin)                                 (Admin Dashboard)
+             │                                                     │
+             └──────────────────────────┬──────────────────────────┘
+                                        │ REST API (Bearer JWT / RBAC)
+                                        ▼
+                           ⚙️ CENTRAL BACKEND (Port 4000)
+                              [Express + TypeScript]
+                                        │
+             ┌──────────────────────────┼──────────────────────────┐
+             │                          │                          │
+             ▼                          ▼                          ▼
+     🗄️ Database (Prisma)         🧠 AI Subsystem            📹 CCTV Feeds
+   SQLite (Dev) / Postgres     (YOLOv8 + ByteTrack)     (6 Monitored Feeds)
+             │                          │                          │
+             └──────────────────────────┼──────────────────────────┘
+                                        │ Real-time Telemetry Webhooks
+                                        ▼
+                         🚨 AI Alerts & Surprise Duties
 ```
 
 ---
 
-## 🚀 Getting Started
+## ⚡ Canonical Network Ports
 
-### 📱 Running the Flutter Mobile App
+| Subsystem | Service URL | Purpose |
+| :--- | :--- | :--- |
+| **Central Backend API** | `http://localhost:4000/api` | Central source of truth, auth, RBAC, DB CRUD, telemetry webhooks |
+| **React Admin Dashboard** | `http://localhost:5173` | HQ administrative oversight, live map, CCTV grid, charts & audit logs |
+| **Flutter Mobile Client** | `http://localhost:4000/mobile` | Inspector surprise audit wizard, geofence unlock, watermarked photos |
+| **AI Vision Subsystem** | `http://localhost:8000/api/v1` | YOLO person detection, spatial zones, loitering & attendance discrepancy |
+
+---
+
+## 🚀 1-Click Master Launcher (Windows)
+
+Launch all subsystems simultaneously using either script from the root directory:
+
+```powershell
+# Double-click or run in terminal:
+.\start_all_services.bat
+# Or via PowerShell:
+.\start_all_services.ps1
+```
+
+---
+
+## 🔑 Seeded Demo Credentials
+
+| Stakeholder Role | Email | Password | 4-Digit MPIN | Capabilities |
+| :--- | :--- | :--- | :--- | :--- |
+| **DoSJE HQ Admin** | `admin@dosje.gov.in` | `admin123` | `1234` | Full national dashboard, AI anomaly ticker, CCTV grid, duty assigner |
+| **PMU Inspector** | `inspector@dosje.gov.in` | `inspector123` | `1234` | Geofence unlock, 5-step field audit wizard, watermarked evidence capture |
+| **PMU Lead** | `pmu@dosje.gov.in` | `pmu123` | `1234` | State-level oversight, random inspection allocation, compliance audit |
+| **Institute Incharge** | `institute@dosje.gov.in` | `admin123` | `1234` | Operational health, daily biometric punch tally, standby surprise VC |
+
+---
+
+## 🧪 Comprehensive Quality & Test Verification
+
+All suites pass 100% with zero errors:
+
+| Test Suite | Command | Result | Coverage |
+| :--- | :--- | :---: | :--- |
+| **AI Subsystem Pytest** | `.\venv\Scripts\python -m pytest tests` | ✅ **81/81 PASSED** | YOLO detection, tracking, spatial zones, loitering, forwarder |
+| **Backend Integration** | `cd backend && npm test` | ✅ **17/17 PASSED** | Auth, RBAC 403, random assign, geofence, alerts, evidence |
+| **23-Step End-to-End** | `cd backend && npx tsx src/__tests__/e2e_scenario.ts` | ✅ **23/23 PASSED** | Full jury workflow from CCTV event to signed audit certificate |
+| **Admin Web Build** | `cd admin-web && npm run build` | ✅ **0 ERRORS** | 2,465 modules transformed to production bundle |
+
+---
+
+## 🎬 Live SIH Jury Demonstration Script (5-Minute Walkthrough)
+
+1. **National Headquarters Oversight**:
+   - Open `http://localhost:5173`. Sign in with `admin@dosje.gov.in` / `admin123`.
+   - Show live counters (Active Institutes, Online CCTVs, Open Alerts, High-Risk Projects).
+   - Review the **Live Geographical Map** showing institutes across Delhi, UP, Maharashtra, and Karnataka.
+
+2. **CCTV Telemetry & AI Anomaly Detection**:
+   - Navigate to **CCTV Feeds** tab. Observe live feeds (`CAM-MOSJE-01` to `CAM-MOSJE-06`).
+   - Notice `CAM-MOSJE-06` is offline, and `CAM-MOSJE-01` has triggered a **Restricted Zone Breach** alert.
+   - Show how the AI Subsystem cryptographically sealed the snapshot with a SHA-256 hash.
+
+3. **Weighted Random Inspection Duty Allocation**:
+   - In the **Inspections** or **Dashboard** view, trigger **"Random Surprise Audit Assigner"**.
+   - Explain the algorithm: weights institutes dynamically by offline camera hours, attendance deviations, and elapsed audit time.
+   - The engine generates a surprise duty (e.g. `DOSJE-SURPRISE-3834`) and notifies the on-call inspector.
+
+4. **Mobile Inspector Field Execution**:
+   - Open `http://localhost:4000/mobile` (or mobile app). Log in with MPIN `1234`.
+   - The inspector sees the newly assigned surprise duty. Notice the 5-step audit wizard is **LOCKED** due to GPS geofencing.
+   - Click *"Simulate On-Site Arrival"* (< 100m). The form cryptographically unlocks.
+   - Proceed through the 5 steps: Arrival Gate Photo (watermarked), Sanitation ratings, Headcount reconciliation, and Digital Sign-off.
+
+5. **Closing the Loop (Zero Proxy Operations)**:
+   - Switch back to Admin Web at `http://localhost:5173`.
+   - The inspection is immediately visible in the **Completed** queue with submitted checklist scores.
+   - Navigate to **Audit Logs** to show the immutable compliance record with exact user identities, timestamps, and IP addresses.
+   - Attempt an unauthorized administrative operation to demonstrate server-side RBAC rejection (`403 Forbidden`).
+
+---
+
+## 🛠️ Manual Installation & Developer Setup
+
+### 1. Central Backend Setup
 ```bash
-# 1. Install dependencies
-flutter pub get
-
-# 2. Run automated test suite
-flutter test
-
-# 3. Launch the app
-flutter run -d chrome     # Run on Web
-# or
-flutter run -d windows    # Run on Windows Desktop
+cd backend
+npm install
+npx prisma generate
+npx prisma db push
+npm run prisma:seed
+npm run dev               # Runs on http://localhost:4000
 ```
 
-### 🧠 Running the AI Subsystem
+### 2. React Admin Web Setup
 ```bash
-# 1. Install python dependencies
-pip install -r requirements.txt
+cd admin-web
+npm install
+npm run dev               # Runs on http://localhost:5173
+```
 
-# 2. Run integration demo
-python run_phase6_integration_demo.py
+### 3. AI Subsystem Setup
+```bash
+# In project root:
+.\venv\Scripts\python run_phase6_integration_demo.py  # Runs on http://localhost:8000
 ```
 
 ---
 
-## 🧪 Quality & Test Coverage
-- **Flutter Static Analysis**: `flutter analyze` passes with **0 errors, 0 warnings**.
-- **Flutter Automated Tests**: 4/4 test suites passed.
-- **Production Web Build**: Verified with `flutter build web`.
-
----
-
-## ⚖️ License
-Distributed under the MIT License. Developed for Ministry of Social Justice and Empowerment (DoSJE) Smart India Hackathon initiative.
+## ⚖️ License & Hackathon Attribution
+Developed for the **Ministry of Social Justice and Empowerment (DoSJE)**, Government of India, under the Smart India Hackathon initiative. Distributed under the MIT License.

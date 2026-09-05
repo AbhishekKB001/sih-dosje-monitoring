@@ -385,6 +385,14 @@ class Member4APIService:
         self.server = ThreadingHTTPServer((self.host, self.port), Member4APIHandler)
         logger.info(f"Member 4 REST API & SSE Server listening at http://{self.host}:{self.port}")
 
+        # Automatically connect AI alert publisher to Central Backend API (Port 4000)
+        try:
+            from ai_subsystem.adapters.backend_forwarder import attach_backend_forwarder
+            backend_url = os.getenv("CENTRAL_BACKEND_URL", "http://localhost:4000/api/alerts")
+            attach_backend_forwarder(self.orchestrator, backend_url)
+        except Exception as e:
+            logger.warning(f"Could not attach backend forwarder: {e}")
+
         if blocking:
             try:
                 self.server.serve_forever()

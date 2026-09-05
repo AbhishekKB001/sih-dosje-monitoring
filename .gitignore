@@ -18,8 +18,10 @@ venv/
 .venv/
 .pytest_cache/
 __pycache__/
-evidence_store/
-data/
+/evidence_store/
+/data/
+backend/data/
+!lib/data/
 *.pt
 *.onnx
 weights/

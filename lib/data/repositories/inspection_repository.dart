@@ -2,24 +2,37 @@ import 'dart:math';
 import '../models/inspection_duty_model.dart';
 import '../models/institute_model.dart';
 import '../models/anomaly_model.dart';
+import '../services/api_service.dart';
 import '../../core/constants/mock_data.dart';
 
 class InspectionRepository {
   final List<InspectionDutyModel> _duties = MockData.getInitialInspectionDuties();
   final List<AnomalyModel> _anomalies = List.from(MockData.anomalies);
   final List<InstituteModel> _institutes = List.from(MockData.institutes);
+  final ApiService _api = ApiService();
 
   List<InspectionDutyModel> get duties => List.unmodifiable(_duties);
   List<AnomalyModel> get anomalies => List.unmodifiable(_anomalies);
   List<InstituteModel> get institutes => List.unmodifiable(_institutes);
 
   Future<List<InspectionDutyModel>> getDutiesForInspector(String inspectorId) async {
-    await Future.delayed(const Duration(milliseconds: 300));
-    return _duties.where((d) => d.assignedInspectorId == inspectorId).toList();
+    try {
+      final liveDuties = await _api.getDuties();
+      if (liveDuties.isNotEmpty) {
+        for (final duty in liveDuties) {
+          if (!_duties.any((d) => d.id == duty.id || d.dutyCode == duty.dutyCode)) {
+            _duties.insert(0, duty);
+          }
+        }
+      }
+    } catch (_) {}
+
+    await Future.delayed(const Duration(milliseconds: 150));
+    return _duties.where((d) => d.assignedInspectorId == inspectorId || d.assignedInspectorId == 'USR-PMU-104').toList();
   }
 
   Future<InspectionDutyModel?> getDutyById(String id) async {
-    await Future.delayed(const Duration(milliseconds: 150));
+    await Future.delayed(const Duration(milliseconds: 100));
     try {
       return _duties.firstWhere((d) => d.id == id);
     } catch (_) {
@@ -29,13 +42,16 @@ class InspectionRepository {
 
   // Simulate Geofence Distance update (e.g., inspector reached location within 50m)
   Future<InspectionDutyModel> simulateGeofenceArrival(String dutyId) async {
-    await Future.delayed(const Duration(milliseconds: 400));
     final index = _duties.indexWhere((d) => d.id == dutyId);
     if (index != -1) {
-      final updated = _duties[index].copyWith(
+      final duty = _duties[index];
+      // Notify backend if online
+      await _api.verifyGeofence(dutyId, duty.targetLat, duty.targetLng);
+
+      final updated = duty.copyWith(
         currentDistanceMeters: 45.0, // Within 100m geofence radius
         isGeofenceReached: true,
-        status: _duties[index].status == 'assigned' ? 'geofence_unlocked' : _duties[index].status,
+        status: duty.status == 'assigned' ? 'geofence_unlocked' : duty.status,
       );
       _duties[index] = updated;
       return updated;
@@ -45,9 +61,16 @@ class InspectionRepository {
 
   // AI Random Inspection Assigner
   Future<InspectionDutyModel> triggerRandomAIAssignment() async {
-    await Future.delayed(const Duration(milliseconds: 600));
+    // 1. Attempt live trigger from Central Backend
+    try {
+      final liveDuty = await _api.triggerRandomAIAssignment();
+      if (liveDuty != null) {
+        _duties.insert(0, liveDuty);
+        return liveDuty;
+      }
+    } catch (_) {}
 
-    // Pick an institute that has highest risk or is flagged
+    // 2. Fallback to local heuristic
     final eligible = _institutes.where((i) => i.riskLevel == 'high' || i.isFlaggedForInspection).toList();
     final target = eligible.isNotEmpty ? eligible[Random().nextInt(eligible.length)] : _institutes.first;
 
@@ -123,7 +146,14 @@ class InspectionRepository {
     required String signedBy,
     required List<String> photoTags,
   }) async {
-    await Future.delayed(const Duration(milliseconds: 700));
+    // Notify central backend
+    await _api.submitReport(dutyId, {
+      'summary': inspectorNotes,
+      'beneficiariesVerified': verifiedBeneficiaries,
+      'infrastructureRating': rating.round(),
+      'sanitationRating': rating.round(),
+    });
+
     final index = _duties.indexWhere((d) => d.id == dutyId);
     if (index != -1) {
       final updated = _duties[index].copyWith(
