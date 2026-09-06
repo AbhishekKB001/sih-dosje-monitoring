@@ -1,0 +1,315 @@
+// Production PostgreSQL Schema for Central DoSJE Monitoring Backend
+// Can be activated by setting PRISMA_SCHEMA=prisma/schema.postgresql.prisma or switching datasource provider.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  INSPECTOR
+  PMU
+  STATE_NODAL
+  AGENCY_REPRESENTATIVE
+}
+
+enum ProjectStatus {
+  ACTIVE
+  PENDING
+  COMPLETED
+}
+
+enum InstituteType {
+  SHELTER_HOME
+  HOSTEL
+  DE_ADDICTION_CENTRE
+  TRAINING_INSTITUTE
+}
+
+enum CameraStatus {
+  ONLINE
+  OFFLINE
+  DEGRADED
+}
+
+enum InspectionType {
+  ROUTINE
+  SURPRISE
+  FOLLOW_UP
+}
+
+enum InspectionStatus {
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum AlertType {
+  HEADCOUNT_ANOMALY
+  UNATTENDED_ROOM
+  LOITERING
+  OFF_HOURS_ACTIVITY
+  INACTIVITY
+}
+
+enum AlertSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum EvidenceFileType {
+  IMAGE
+  VIDEO
+  AUDIO
+  DOCUMENT
+}
+
+enum VCStatus {
+  PENDING
+  ACTIVE
+  ENDED
+  MISSED
+}
+
+enum NotificationType {
+  ALERT
+  INSPECTION
+  SYSTEM
+  REPORT
+}
+
+model User {
+  id           String    @id @default(uuid())
+  email        String    @unique
+  passwordHash String
+  mpinHash     String?
+  name         String
+  role         Role      @default(INSPECTOR)
+  department   String?
+  district     String?
+  state        String?
+  phone        String?
+  active       Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  inspections  Inspection[]      @relation("AssignedInspector")
+  auditLogs    AuditLog[]
+  notifications Notification[]
+  hostedVC     VCSession[]       @relation("HostVCSessions")
+  joinedVC     VCSession[]       @relation("ParticipantVCSessions")
+}
+
+model Project {
+  id               String        @id @default(uuid())
+  code             String        @unique
+  name             String
+  description      String?
+  scheme           String
+  budget           Float         @default(0.0)
+  beneficiaryCount Int           @default(0)
+  state            String
+  district         String
+  status           ProjectStatus @default(ACTIVE)
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  institutes       Institute[]
+}
+
+model Institute {
+  id                   String        @id @default(uuid())
+  code                 String        @unique
+  name                 String
+  type                 InstituteType @default(SHELTER_HOME)
+  address              String
+  state                String
+  district             String
+  latitude             Float
+  longitude            Float
+  geofenceRadiusMeters Float         @default(100.0)
+  contactPerson        String?
+  contactPhone         String?
+  active               Boolean       @default(true)
+  projectId            String?
+  project              Project?      @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+
+  cameras              Camera[]
+  inspections          Inspection[]
+  attendanceRecords    AttendanceRecord[]
+  aiAlerts             AIAlert[]
+}
+
+model Camera {
+  id          String       @id @default(uuid())
+  cameraId    String       @unique
+  name        String
+  rtspUrl     String
+  streamType  String       @default("SIMULATED")
+  instituteId String
+  institute   Institute    @relation(fields: [instituteId], references: [id], onDelete: Cascade)
+  zone        String
+  status      CameraStatus @default(ONLINE)
+  fps         Int          @default(25)
+  resolution  String       @default("1920x1080")
+  lastPing    DateTime     @default(now())
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  alerts      AIAlert[]
+}
+
+model Inspection {
+  id                 String           @id @default(uuid())
+  inspectionNumber   String           @unique
+  instituteId        String
+  institute          Institute        @relation(fields: [instituteId], references: [id], onDelete: Cascade)
+  inspectorId        String?
+  inspector          User?            @relation("AssignedInspector", fields: [inspectorId], references: [id], onDelete: SetNull)
+  type               InspectionType   @default(ROUTINE)
+  status             InspectionStatus @default(SCHEDULED)
+  scheduledDate      DateTime
+  completedDate      DateTime?
+  isSurprise         Boolean          @default(false)
+  geofenceVerified   Boolean          @default(false)
+  arrivalLatitude    Float?
+  arrivalLongitude   Float?
+  arrivalTimestamp   DateTime?
+  riskScore          Float            @default(0.0)
+  notes              String?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
+  report             InspectionReport?
+  evidenceItems      EvidenceItem[]
+  vcSessions         VCSession[]
+}
+
+model InspectionReport {
+  id                    String      @id @default(uuid())
+  inspectionId          String      @unique
+  inspection            Inspection  @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+  summary               String
+  beneficiariesVerified Int         @default(0)
+  attendanceMatches     Boolean     @default(true)
+  infrastructureRating  Int         @default(3)
+  sanitationRating      Int         @default(3)
+  hygieneRating         Int         @default(3)
+  foodQualityRating     Int         @default(3)
+  issuesIdentified      String?
+  recommendations       String?
+  actionRequired        Boolean     @default(false)
+  submittedAt           DateTime    @default(now())
+  createdAt             DateTime    @default(now())
+  updatedAt             DateTime    @updatedAt
+}
+
+model AttendanceRecord {
+  id                String    @id @default(uuid())
+  instituteId       String
+  institute         Institute @relation(fields: [instituteId], references: [id], onDelete: Cascade)
+  date              DateTime
+  totalEnrolled     Int       @default(0)
+  physicalCount     Int       @default(0)
+  bioMetricCount    Int       @default(0)
+  aiEstimatedCount  Int       @default(0)
+  discrepancyFlag   Boolean   @default(false)
+  discrepancyReason String?
+  verifiedBy        String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+}
+
+model AIAlert {
+  id                String        @id @default(uuid())
+  alertId           String        @unique
+  cameraId          String?
+  camera            Camera?       @relation(fields: [cameraId], references: [id], onDelete: SetNull)
+  instituteId       String
+  institute         Institute     @relation(fields: [instituteId], references: [id], onDelete: Cascade)
+  type              AlertType
+  severity          AlertSeverity
+  description       String
+  zone              String?
+  detectedCount     Int?
+  expectedCount     Int?
+  confidence        Float         @default(0.85)
+  timestamp         DateTime      @default(now())
+  frameSnapshotUrl  String?
+  acknowledged      Boolean       @default(false)
+  acknowledgedBy    String?
+  acknowledgedAt    DateTime?
+  resolved          Boolean       @default(false)
+  resolvedAt        DateTime?
+  resolutionNotes   String?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+}
+
+model EvidenceItem {
+  id           String           @id @default(uuid())
+  inspectionId String
+  inspection   Inspection       @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+  fileUrl      String
+  fileType     EvidenceFileType @default(IMAGE)
+  sha256Hash   String
+  latitude     Float?
+  longitude    Float?
+  capturedAt   DateTime         @default(now())
+  tamperEvident Boolean         @default(true)
+  createdAt    DateTime         @default(now())
+}
+
+model VCSession {
+  id                String      @id @default(uuid())
+  sessionNumber     String      @unique
+  inspectionId      String?
+  inspection        Inspection? @relation(fields: [inspectionId], references: [id], onDelete: SetNull)
+  scheduledTime     DateTime
+  hostUserId        String
+  hostUser          User        @relation("HostVCSessions", fields: [hostUserId], references: [id], onDelete: Cascade)
+  participantUserId String?
+  participantUser   User?       @relation("ParticipantVCSessions", fields: [participantUserId], references: [id], onDelete: SetNull)
+  status            VCStatus    @default(PENDING)
+  meetingUrl        String
+  recordingUrl      String?
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+}
+
+model Notification {
+  id        String           @id @default(uuid())
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  message   String
+  type      NotificationType @default(ALERT)
+  isRead    Boolean          @default(false)
+  link      String?
+  createdAt DateTime         @default(now())
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  userRole  String?
+  action    String
+  entity    String
+  entityId  String?
+  details   String?
+  ipAddress String?
+  userAgent String?
+  timestamp DateTime @default(now())
+  createdAt DateTime @default(now())
+}

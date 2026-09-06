@@ -1,24 +1,65 @@
 version: "3.8"
 
 services:
-  member4-ai:
+  backend:
     build:
-      context: .
+      context: ./backend
       dockerfile: Dockerfile
-    container_name: sih2026_member4_ai
+    container_name: dosje_central_backend
+    restart: unless-stopped
+    ports:
+      - "4000:4000"
+    environment:
+      - PORT=4000
+      - NODE_ENV=production
+      - DATABASE_URL=file:./data/dev.db
+      - JWT_SECRET=dosje_secret_key_sih2026_jwt_token_auth
+      - AI_SHARED_SECRET=sih2026_ai_webhook_secret_key_dosje
+      - CORS_ORIGIN=http://localhost:5173,http://localhost:3000
+    volumes:
+      - backend_data:/app/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4000/api/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  ai-subsystem:
+    build:
+      context: ./ai-subsystem
+      dockerfile: Dockerfile
+    container_name: dosje_ai_subsystem
     restart: unless-stopped
     ports:
       - "8000:8000"
-    volumes:
-      - ./data:/app/data
-      - ./evidence_store:/app/evidence_store
     environment:
-      - AI_CONFIG_VERSION=cfg-2026.1
-      - AI_MODEL_VERSION=v1.0.0
       - AI_HOST=0.0.0.0
       - AI_PORT=8000
+      - AI_LOG_LEVEL=INFO
+      - AI_BACKEND_WEBHOOK_URL=http://backend:4000/api/alerts
+    volumes:
+      - ./cctv-demo/videos:/app/cctv-demo/videos:ro
+      - ai_evidence:/app/data/evidence
+    depends_on:
+      - backend
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
       interval: 15s
       timeout: 5s
       retries: 3
+
+  admin-web:
+    build:
+      context: ./admin-web
+      dockerfile: Dockerfile
+    container_name: dosje_admin_web
+    restart: unless-stopped
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+      - ai-subsystem
+
+volumes:
+  backend_data:
+  ai_evidence:

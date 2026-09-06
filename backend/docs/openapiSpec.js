@@ -20,8 +20,12 @@ Backend Core API services providing:
     },
     servers: [
         {
-            url: "http://localhost:5000",
-            description: "Local Development Server",
+            url: "http://localhost:4000/api",
+            description: "Canonical Central Backend API",
+        },
+        {
+            url: "http://localhost:4000",
+            description: "Local Development Server Root",
         },
     ],
     components: {
