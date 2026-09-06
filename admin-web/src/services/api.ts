@@ -92,7 +92,12 @@ export async function login(payload: LoginPayload): Promise<LoginResponse> {
     }
     return withDelay({
       token: 'mock-jwt-token.demo-only',
-      user: { id: 'USR-100', name: 'Dr. S. Nagaraj', email: payload.email, role: 'super_admin' },
+      user: {
+        id: 'USR-MEMBER-01',
+        name: 'Member 1 (DoSJE Official)',
+        email: payload.email || 'member1.dosje@sih.gov.in',
+        role: 'ADMIN',
+      },
     });
   }
   return request<LoginResponse>('/auth/login', {
@@ -151,6 +156,42 @@ export async function getCameras(): Promise<CameraFeed[]> {
   return request('/cctv/cameras');
 }
 
+export async function sendPtzCommand(
+  id: string,
+  action: 'PAN_LEFT' | 'PAN_RIGHT' | 'TILT_UP' | 'TILT_DOWN' | 'ZOOM_IN' | 'ZOOM_OUT' | 'HOME',
+  speed = 1.0
+): Promise<{ success: boolean; ptz: { pan: number; tilt: number; zoom: number }; message: string }> {
+  if (USE_MOCK) {
+    return withDelay({
+      success: true,
+      ptz: { pan: 10, tilt: 5, zoom: 1.2 },
+      message: `PTZ command ${action} executed successfully (simulated)`,
+    });
+  }
+  return request(`/cctv/cameras/${id}/ptz`, {
+    method: 'POST',
+    body: JSON.stringify({ action, speed }),
+  });
+}
+
+export async function toggleRecording(
+  id: string,
+  action: 'START' | 'STOP',
+  profile = 'SIMULATED_ONVIF_RECORDING'
+): Promise<{ success: boolean; recording: boolean; message: string }> {
+  if (USE_MOCK) {
+    return withDelay({
+      success: true,
+      recording: action === 'START',
+      message: `Recording ${action.toLowerCase()}ed successfully (simulated)`,
+    });
+  }
+  return request(`/cctv/cameras/${id}/record`, {
+    method: 'POST',
+    body: JSON.stringify({ action, profile }),
+  });
+}
+
 // --- Alerts ----------------------------------------------------------------
 
 export async function getAlerts(): Promise<AlertItem[]> {
@@ -160,10 +201,18 @@ export async function getAlerts(): Promise<AlertItem[]> {
 
 export async function updateAlertStatus(
   id: string,
-  status: AlertItem['status']
+  status: AlertItem['status'],
+  notes?: string
 ): Promise<void> {
   if (USE_MOCK) return withDelay(undefined);
-  return request(`/alerts/${id}`, { method: 'PATCH', body: JSON.stringify({ status }) });
+  return request(`/alerts/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ status, notes }),
+  });
+}
+
+export async function resolveAlert(id: string, notes?: string): Promise<void> {
+  return updateAlertStatus(id, 'resolved', notes);
 }
 
 // --- Reports ----------------------------------------------------------------
@@ -171,6 +220,57 @@ export async function updateAlertStatus(
 export async function getReports(): Promise<InspectionReport[]> {
   if (USE_MOCK) return withDelay(mock.reports);
   return request('/reports');
+}
+
+export async function getReportSummary(id: string): Promise<any> {
+  if (USE_MOCK) {
+    return withDelay({
+      success: true,
+      report: { id, certificateHash: 'CERT-DEMO-001', complianceStatus: 'COMPLIANT' },
+    });
+  }
+  return request(`/reports/${id}/summary`);
+}
+
+// --- Dynamic Weighted Assignment (Member 5 & 1) ------------------------------
+
+export async function triggerRandomAssignment(payload?: {
+  count?: number;
+  date?: string;
+  instituteId?: string;
+}): Promise<{ success: boolean; message: string; count: number; assigned: any[]; duty?: any }> {
+  if (USE_MOCK) {
+    return withDelay({
+      success: true,
+      message: 'Surprise inspections generated and assigned based on multi-factor risk scores',
+      count: payload?.count || 1,
+      assigned: [],
+    });
+  }
+  return request('/inspections/random-assign', {
+    method: 'POST',
+    body: JSON.stringify(payload || {}),
+  });
+}
+
+// --- Surprise Video Conference (Member 1 & 4) --------------------------------
+
+export async function initiateSurpriseVC(payload?: {
+  projectId?: string;
+  instituteId?: string;
+}): Promise<{ success: boolean; session: any; meetingUrl: string; message: string }> {
+  if (USE_MOCK) {
+    return withDelay({
+      success: true,
+      message: 'Surprise Video Conference initiated (Demo Bridge Active)',
+      session: { sessionNumber: 'VC-DOSJE-DEMO' },
+      meetingUrl: 'https://meet.jit.si/dosje-surveillance-demo',
+    });
+  }
+  return request('/vc/sessions/random', {
+    method: 'POST',
+    body: JSON.stringify(payload || {}),
+  });
 }
 
 // --- Analytics ----------------------------------------------------------------

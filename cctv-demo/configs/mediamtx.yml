@@ -1,0 +1,66 @@
+# MediaMTX Configuration for Smart India Hackathon (SIH)
+# AI-Based Real-Time Monitoring & Smart Inspection Platform
+# Module: Member 3 - CCTV Surveillance & Video Conferencing
+
+# Global Log Level: info, warn, error, debug
+logLevel: info
+logDestinations: [stdout]
+
+###############################################
+# API & Control Interface
+###############################################
+api: yes
+apiAddress: :9997
+
+###############################################
+# RTSP Server Settings (Ingress)
+###############################################
+rtsp: yes
+protocols: [tcp, udp]
+rtspAddress: :8554
+rtspsAddress: :8322
+rtpAddress: :8000
+rtcpAddress: :8001
+
+###############################################
+# RTMP Server Settings (Optional secondary ingress)
+###############################################
+rtmp: yes
+rtmpAddress: :1935
+
+###############################################
+# HLS Server Settings (Egress for Web Dashboard)
+###############################################
+hls: yes
+hlsAddress: :8888
+# Allow CORS for browser frontend players (e.g. localhost:5173, localhost:3000)
+hlsAllowOrigin: '*'
+hlsVariant: fmp4
+hlsAlwaysRemux: yes
+hlsSegmentCount: 5
+hlsSegmentDuration: 1s
+hlsPartDuration: 200ms
+# Directory to store HLS segments in memory/disk
+hlsDirectory: ''
+
+###############################################
+# WebRTC (WHEP) Settings (Ultra-low latency egress)
+###############################################
+webrtc: yes
+webrtcAddress: :8889
+webrtcAllowOrigin: '*'
+webrtcLocalUDPAddress: :8189
+# Public STUN server for ICE negotiation
+webrtcICEServers2:
+  - url: stun:stun.l.google.com:19302
+
+###############################################
+# Stream Paths Configuration
+###############################################
+paths:
+  # Catch-all path for dynamic camera feeds (e.g. /live/camera-1, /live/cam-project-a)
+  all_others:
+    # Allow publisher streams without pre-configuration
+    source: publisher
+    # Keep stream in cache briefly on brief network hiccups
+    fallback: ""

@@ -1,4 +1,7 @@
 import { Router } from 'express';
+import fs from 'fs';
+import path from 'path';
+import crypto from 'crypto';
 import { prisma } from '../lib/prisma';
 import { optionalAuthenticateToken, authenticateToken, requireRole } from '../middleware/auth';
 import { recordAuditLog } from '../middleware/audit';
@@ -149,6 +152,148 @@ router.post('/cameras/:id/ping', async (req, res): Promise<void> => {
     res.json(formatCamera(updated));
   } catch (err) {
     res.status(500).json({ success: false, message: 'Failed to update camera heartbeat' });
+  }
+});
+
+// POST /api/cctv/cameras/:id/ptz
+// Pan-Tilt-Zoom telemetry control abstraction
+router.post('/cameras/:id/ptz', optionalAuthenticateToken, async (req: AuthenticatedRequest, res): Promise<void> => {
+  try {
+    const { action, pan, tilt, zoom } = req.body;
+    const camera = await prisma.camera.findFirst({
+      where: { OR: [{ id: req.params.id }, { cameraId: req.params.id }] },
+      include: { institute: true },
+    });
+
+    if (!camera) {
+      res.status(404).json({ success: false, message: 'Camera not found' });
+      return;
+    }
+
+    const command = action || 'RESET';
+    const currentCoords = {
+      pan: typeof pan === 'number' ? pan : 0.0,
+      tilt: typeof tilt === 'number' ? tilt : 0.0,
+      zoom: typeof zoom === 'number' ? zoom : 1.0,
+    };
+
+    // Calculate step movement based on action
+    switch (command.toUpperCase()) {
+      case 'PAN_LEFT':
+        currentCoords.pan = Math.max(-180, currentCoords.pan - 15);
+        break;
+      case 'PAN_RIGHT':
+        currentCoords.pan = Math.min(180, currentCoords.pan + 15);
+        break;
+      case 'TILT_UP':
+        currentCoords.tilt = Math.min(90, currentCoords.tilt + 10);
+        break;
+      case 'TILT_DOWN':
+        currentCoords.tilt = Math.max(-45, currentCoords.tilt - 10);
+        break;
+      case 'ZOOM_IN':
+        currentCoords.zoom = Math.min(10.0, Math.round((currentCoords.zoom + 0.5) * 10) / 10);
+        break;
+      case 'ZOOM_OUT':
+        currentCoords.zoom = Math.max(1.0, Math.round((currentCoords.zoom - 0.5) * 10) / 10);
+        break;
+      case 'RESET':
+        currentCoords.pan = 0.0;
+        currentCoords.tilt = 0.0;
+        currentCoords.zoom = 1.0;
+        break;
+    }
+
+    await recordAuditLog({
+      userId: req.user?.id,
+      userRole: req.user?.role || 'OPERATOR',
+      action: 'PTZ_CAMERA_COMMAND',
+      entity: 'CAMERA',
+      entityId: camera.id,
+      details: `PTZ action '${command}' dispatched for camera ${camera.cameraId} (${camera.name}). New coordinates: Pan ${currentCoords.pan}°, Tilt ${currentCoords.tilt}°, Zoom ${currentCoords.zoom}x`,
+    });
+
+    res.json({
+      success: true,
+      cameraId: camera.cameraId,
+      cameraName: camera.name,
+      command,
+      capability: 'SIMULATED_ONVIF_PROFILE_S',
+      isPhysicalHardwareConnected: false,
+      ptzSupported: true,
+      currentPosition: currentCoords,
+      ptz: currentCoords,
+      status: 'EXECUTED_VIA_TELEMETRY_BRIDGE',
+      timestamp: new Date().toISOString(),
+    });
+  } catch (err: any) {
+    console.error('PTZ error:', err);
+    res.status(500).json({ success: false, message: 'Failed to execute PTZ command' });
+  }
+});
+
+// POST /api/cctv/cameras/:id/record
+// On-demand video clip recording trigger for incident preservation
+router.post('/cameras/:id/record', optionalAuthenticateToken, async (req: AuthenticatedRequest, res): Promise<void> => {
+  try {
+    const { action, durationSec } = req.body;
+    const camera = await prisma.camera.findFirst({
+      where: { OR: [{ id: req.params.id }, { cameraId: req.params.id }] },
+      include: { institute: true },
+    });
+
+    if (!camera) {
+      res.status(404).json({ success: false, message: 'Camera not found' });
+      return;
+    }
+
+    const isStart = (action || 'START').toUpperCase() === 'START';
+    const clipDuration = Number(durationSec) || 60;
+    const clipId = `REC-${camera.cameraId}-${Date.now()}`;
+    const clipRelativePath = `/data/evidence/clips/${clipId}.mp4`;
+    const clipsDir = path.resolve(__dirname, '../../data/evidence/clips');
+    const clipFullPath = path.join(clipsDir, `${clipId}.mp4`);
+
+    let clipHash = '';
+    let isFileGenerated = false;
+
+    if (isStart) {
+      fs.mkdirSync(clipsDir, { recursive: true });
+      const demoSource = path.resolve(__dirname, '../../data/demo_cctv.mp4');
+      if (fs.existsSync(demoSource)) {
+        fs.copyFileSync(demoSource, clipFullPath);
+        const buffer = fs.readFileSync(clipFullPath);
+        clipHash = crypto.createHash('sha256').update(buffer).digest('hex');
+        isFileGenerated = true;
+      }
+    }
+
+    await recordAuditLog({
+      userId: req.user?.id,
+      userRole: req.user?.role || 'OPERATOR',
+      action: isStart ? 'START_CAMERA_RECORDING' : 'STOP_CAMERA_RECORDING',
+      entity: 'CAMERA',
+      entityId: camera.id,
+      details: `${isStart ? 'Started' : 'Stopped'} incident clip recording (${clipId}) on ${camera.cameraId}. Duration: ${clipDuration}s. File generated: ${isFileGenerated}`,
+    });
+
+    res.json({
+      success: true,
+      cameraId: camera.cameraId,
+      cameraName: camera.name,
+      clipId,
+      isRecording: isStart,
+      recording: isStart,
+      durationSec: clipDuration,
+      storagePath: clipRelativePath,
+      isFileGenerated,
+      sha256Hash: clipHash,
+      message: isStart ? 'Real demo incident clip recording initiated and stored in vault' : 'Recording stopped and sealed',
+      timestamp: new Date().toISOString(),
+    });
+  } catch (err: any) {
+    console.error('Record error:', err);
+    res.status(500).json({ success: false, message: 'Failed to toggle recording' });
   }
 });
 

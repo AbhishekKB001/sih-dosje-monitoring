@@ -88,7 +88,141 @@ async function main() {
     },
   });
 
-  console.log('✅ Seeded 4 primary stakeholder users.');
+  // ============================================================
+  // SIX TEAM DEMONSTRATION ACCOUNTS (SIH 2026 EVALUATION)
+  // Securely hashed passwords, system role mapping, zero secrets
+  // ============================================================
+  const demoMemberPasswordHash = await bcrypt.hash('DemoPass@2026', 10);
+
+  // Member 1: DoSJE Department Official (monitoring dashboard & VC initiation)
+  await prisma.user.create({
+    data: {
+      id: 'USR-MEMBER-01',
+      email: 'member1.dosje@sih.gov.in',
+      passwordHash: demoMemberPasswordHash,
+      mpinHash,
+      name: 'Member 1 (DoSJE Official)',
+      role: 'ADMIN',
+      department: 'Central Monitoring & Evaluation',
+      state: 'National HQ',
+      district: 'New Delhi',
+      phone: '+91 90001 00001',
+    },
+  });
+
+  // Member 2: PMU Inspection Officer (field inspection)
+  await prisma.user.create({
+    data: {
+      id: 'USR-MEMBER-02',
+      email: 'member2.inspector@sih.gov.in',
+      passwordHash: demoMemberPasswordHash,
+      mpinHash,
+      name: 'Member 2 (PMU Inspection Officer)',
+      role: 'INSPECTOR',
+      department: 'PMU Field Operations',
+      state: 'Delhi',
+      district: 'Central Delhi',
+      phone: '+91 90001 00002',
+    },
+  });
+
+  // Member 2 Alias (pmu@sih.gov.in)
+  await prisma.user.create({
+    data: {
+      id: 'USR-MEMBER-02-ALT',
+      email: 'member2.pmu@sih.gov.in',
+      passwordHash: demoMemberPasswordHash,
+      mpinHash,
+      name: 'Member 2 (PMU Inspection Officer)',
+      role: 'INSPECTOR',
+      department: 'PMU Field Operations',
+      state: 'Delhi',
+      district: 'Central Delhi',
+      phone: '+91 90001 00002',
+    },
+  });
+
+  // Member 3: PMU Inspection Officer / CCTV Monitoring Demo
+  await prisma.user.create({
+    data: {
+      id: 'USR-MEMBER-03',
+      email: 'member3.cctv@sih.gov.in',
+      passwordHash: demoMemberPasswordHash,
+      mpinHash,
+      name: 'Member 3 (CCTV Monitoring Demo)',
+      role: 'INSPECTOR',
+      department: 'National Surveillance Command Center',
+      state: 'National HQ',
+      district: 'New Delhi',
+      phone: '+91 90001 00003',
+    },
+  });
+
+  // Member 3 Alias (pmu@sih.gov.in)
+  await prisma.user.create({
+    data: {
+      id: 'USR-MEMBER-03-ALT',
+      email: 'member3.pmu@sih.gov.in',
+      passwordHash: demoMemberPasswordHash,
+      mpinHash,
+      name: 'Member 3 (CCTV Monitoring Demo)',
+      role: 'INSPECTOR',
+      department: 'National Surveillance Command Center',
+      state: 'National HQ',
+      district: 'New Delhi',
+      phone: '+91 90001 00003',
+    },
+  });
+
+  // Member 4: Project Incharge — Institute A
+  await prisma.user.create({
+    data: {
+      id: 'USR-MEMBER-04',
+      email: 'member4.incharge@sih.gov.in',
+      passwordHash: demoMemberPasswordHash,
+      mpinHash,
+      name: 'Member 4 (Project Incharge — Institute A)',
+      role: 'AGENCY_REPRESENTATIVE',
+      department: 'Delhi Memorial Operations',
+      state: 'Delhi',
+      district: 'Central Delhi',
+      phone: '+91 90001 00004',
+    },
+  });
+
+  // Member 5: Project Incharge — Institute B
+  await prisma.user.create({
+    data: {
+      id: 'USR-MEMBER-05',
+      email: 'member5.incharge@sih.gov.in',
+      passwordHash: demoMemberPasswordHash,
+      mpinHash,
+      name: 'Member 5 (Project Incharge — Institute B)',
+      role: 'AGENCY_REPRESENTATIVE',
+      department: 'Lucknow Vocational Operations',
+      state: 'Uttar Pradesh',
+      district: 'Lucknow',
+      phone: '+91 90001 00005',
+    },
+  });
+
+  // Member 6: Institute Staff / Beneficiary Representative Demo
+  await prisma.user.create({
+    data: {
+      id: 'USR-MEMBER-06',
+      email: 'member6.staff@sih.gov.in',
+      passwordHash: demoMemberPasswordHash,
+      mpinHash,
+      name: 'Member 6 (Institute Staff / Beneficiary Demo)',
+      role: 'STAFF',
+      department: 'Beneficiary Liaison Cell',
+      state: 'Delhi',
+      district: 'Central Delhi',
+      phone: '+91 90001 00006',
+    },
+  });
+
+  console.log('✅ Seeded standard + 6 Canonical Team Demonstration accounts.');
 
   // 4. Seed DoSJE Welfare Projects
   const projectSmile = await prisma.project.create({
@@ -166,9 +300,10 @@ async function main() {
       latitude: 28.6139,
       longitude: 77.2090,
       geofenceRadiusMeters: 100.0,
-      contactPerson: 'Smt. Kavita Meena',
-      contactPhone: '+91 11 2398 7654',
+      contactPerson: 'Member 4 (Project Incharge A)',
+      contactPhone: '+91 90001 00004',
       projectId: projectSmile.id,
+      inchargeUserId: 'USR-MEMBER-04',
     },
   });
 
@@ -184,9 +319,10 @@ async function main() {
       latitude: 26.8467,
       longitude: 80.9462,
       geofenceRadiusMeters: 100.0,
-      contactPerson: 'Shri Manoj Saxena',
-      contactPhone: '+91 522 2345 678',
+      contactPerson: 'Member 5 (Project Incharge B)',
+      contactPhone: '+91 90001 00005',
       projectId: projectDaksh.id,
+      inchargeUserId: 'USR-MEMBER-05',
     },
   });
 

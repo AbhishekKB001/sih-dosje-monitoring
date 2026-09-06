@@ -26,6 +26,8 @@ export default function Inspections() {
   const { data, isLoading, error, reload } = useAsyncData(api.getInspections);
   const [query, setQuery] = useState('');
   const [tab, setTab] = useState<InspectionStatus | 'all'>('all');
+  const [isAssigning, setIsAssigning] = useState(false);
+  const [assignmentNotice, setAssignmentNotice] = useState<string | null>(null);
 
   const filtered = useMemo(() => {
     if (!data) return [];
@@ -40,24 +42,59 @@ export default function Inspections() {
     });
   }, [data, query, tab]);
 
+  const handleSurpriseAssign = async () => {
+    setIsAssigning(true);
+    setAssignmentNotice(null);
+    try {
+      const res = await api.triggerRandomAssignment({ count: 3 });
+      setAssignmentNotice(
+        `Multi-Factor Risk Engine: Successfully selected & assigned ${res.count || 3} high-probability surprise duties.`
+      );
+      await reload();
+      setTimeout(() => setAssignmentNotice(null), 5000);
+    } catch (err: any) {
+      setAssignmentNotice(`Failed to assign surprise duties: ${err.message}`);
+    } finally {
+      setIsAssigning(false);
+    }
+  };
+
   if (error) return <ErrorState message={error} onRetry={reload} />;
 
   return (
     <Panel>
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex gap-1 rounded-md bg-paper p-1">
-          {STATUS_TABS.map((s) => (
-            <button
-              key={s}
-              onClick={() => setTab(s)}
-              className={`rounded px-3 py-1.5 text-[12px] font-medium capitalize transition-colors ${
-                tab === s ? 'bg-panel text-ink shadow-panel' : 'text-slate-soft hover:text-ink'
-              }`}
-            >
-              {s.replace('_', ' ')}
-            </button>
-          ))}
+      {assignmentNotice && (
+        <div className="mb-4 rounded-md border border-emerald-500/20 bg-emerald-500/10 px-3.5 py-2 text-[12.5px] font-medium text-emerald-700 dark:text-emerald-300">
+          {assignmentNotice}
         </div>
+      )}
+
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex gap-1 rounded-md bg-paper p-1">
+            {STATUS_TABS.map((s) => (
+              <button
+                key={s}
+                onClick={() => setTab(s)}
+                className={`rounded px-3 py-1.5 text-[12px] font-medium capitalize transition-colors ${
+                  tab === s ? 'bg-panel text-ink shadow-panel' : 'text-slate-soft hover:text-ink'
+                }`}
+              >
+                {s.replace('_', ' ')}
+              </button>
+            ))}
+          </div>
+
+          <button
+            type="button"
+            onClick={handleSurpriseAssign}
+            disabled={isAssigning}
+            className="flex items-center gap-1.5 rounded-md border border-primary/20 bg-primary/10 px-3 py-1.5 text-[12px] font-medium text-primary hover:bg-primary/20 transition-colors disabled:opacity-50"
+          >
+            {isAssigning ? 'Executing Risk Formula…' : '🎲 Trigger Surprise Duty (AI-Weighted)'}
+          </button>
+        </div>
+
         <div className="flex items-center gap-2 rounded-md border border-hairline bg-paper px-3 py-2 md:w-72">
           <Search size={14} className="text-slate-faint" />
           <input

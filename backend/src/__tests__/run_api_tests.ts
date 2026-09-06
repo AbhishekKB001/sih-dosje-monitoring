@@ -1,6 +1,7 @@
 import request from 'supertest';
 import app from '../app';
 import { prisma } from '../lib/prisma';
+import { calculateRiskScore, detectAttendanceAnomaly } from '../services/riskEngine';
 
 async function runBackendTests() {
   console.log('================================================================');
@@ -145,6 +146,50 @@ async function runBackendTests() {
     // 14. Immutable Audit Logs
     const logs = await request(app).get('/api/audit-logs');
     assert(logs.status === 200 && logs.body.length >= 2, 'GET /api/audit-logs records all administrative & inspection actions');
+
+    // 15. CCTV PTZ Camera Controls (Member 1 & 3)
+    const ptz = await request(app)
+      .post('/api/cctv/cameras/CAM-MOSJE-01/ptz')
+      .send({ action: 'PAN_LEFT', speed: 1.0 });
+    assert(
+      ptz.status === 200 && ptz.body.success && ptz.body.ptz.pan === -15,
+      'POST /api/cctv/cameras/:id/ptz adjusts ONVIF pan coordinate to -15°'
+    );
+
+    // 16. CCTV Camera Recording Toggle (Member 1 & 3)
+    const record = await request(app)
+      .post('/api/cctv/cameras/CAM-MOSJE-01/record')
+      .send({ action: 'START' });
+    assert(
+      record.status === 200 && record.body.success && record.body.recording === true,
+      'POST /api/cctv/cameras/:id/record enables continuous recording state'
+    );
+
+    // 17. Certified Inspection Summary Certificate (Member 1 & 5)
+    const cert = await request(app).get(`/api/reports/${inspectionId}/summary`);
+    assert(
+      cert.status === 200 && cert.body.success && cert.body.cryptographicSeal.isSealed === true,
+      'GET /api/reports/:id/summary generates tamper-evident inspection summary certificate'
+    );
+
+    // 18. Member 5 Canonical Risk Engine & Anomaly Formulas
+    const risk = calculateRiskScore({
+      attendanceAnomalyScore: 75,
+      inspectionIssueScore: 60,
+      cctvInconsistencyScore: 50,
+      complaintOrAlertScore: 70,
+      reportingIrregularityScore: 40,
+    });
+    assert(
+      risk.riskScore > 0 && (risk.riskLevel === 'HIGH' || risk.riskLevel === 'MEDIUM') && risk.breakdown.attendanceContribution > 0,
+      'Member 5 Risk Engine: calculateRiskScore computes weighted formula (30/25/20/15/10)'
+    );
+
+    const anomaly = detectAttendanceAnomaly([95, 96, 94, 95, 45]);
+    assert(
+      anomaly.isAnomaly === true && anomaly.anomalyScore >= 60,
+      'Member 5 Risk Engine: detectAttendanceAnomaly detects severe sudden drop'
+    );
   } catch (err) {
     console.error('Test execution error:', err);
     failed++;

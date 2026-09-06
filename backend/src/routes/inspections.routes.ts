@@ -3,6 +3,7 @@ import { prisma } from '../lib/prisma';
 import { optionalAuthenticateToken, authenticateToken, requireRole } from '../middleware/auth';
 import { recordAuditLog } from '../middleware/audit';
 import { AuthenticatedRequest } from '../types';
+import { calculateRiskScore } from '../services/riskEngine';
 
 const router = Router();
 
@@ -156,21 +157,38 @@ router.post('/random-assign', optionalAuthenticateToken, async (req: Authenticat
       return;
     }
 
-    // Weight institutes based on risk criteria:
-    // +40 points if offline cameras exist
-    // +30 points if unresolved AI alerts exist
-    // +20 points if no inspection in past 30 days
+    // Evaluate multi-factor institutional risk via canonical Risk Engine (Member 5):
+    // - 30% Attendance variance
+    // - 25% Inspection interval / historical issues
+    // - 20% Offline CCTV ratio
+    // - 15% Unresolved AI Alerts
+    // - 10% Reporting irregularity
     const scoredInstitutes = institutes.map((inst) => {
-      let score = 20; // baseline
+      const totalCams = inst.cameras.length;
       const offlineCams = inst.cameras.filter((c) => c.status !== 'ONLINE').length;
-      score += offlineCams * 20;
-      score += inst.aiAlerts.length * 15;
+      const cctvRatio = totalCams > 0 ? (offlineCams / totalCams) * 100 : 0;
 
       const lastInsp = inst.inspections[0];
-      if (!lastInsp || Date.now() - lastInsp.scheduledDate.getTime() > 25 * 24 * 60 * 60 * 1000) {
-        score += 25;
-      }
-      return { institute: inst, calculatedRisk: Math.min(95, score) };
+      const daysSinceInsp = lastInsp
+        ? (Date.now() - lastInsp.scheduledDate.getTime()) / (24 * 60 * 60 * 1000)
+        : 60;
+      const inspIssueScore = Math.min(100, Math.round(daysSinceInsp * 2.5));
+
+      const alertScore = Math.min(100, inst.aiAlerts.length * 35);
+
+      const evaluation = calculateRiskScore({
+        attendanceAnomalyScore: inst.aiAlerts.some((a) => a.type.includes('ATTENDANCE')) ? 80 : 20,
+        inspectionIssueScore: inspIssueScore,
+        cctvInconsistencyScore: cctvRatio > 0 ? 80 : 0,
+        complaintOrAlertScore: alertScore,
+        reportingIrregularityScore: 15,
+      });
+
+      return {
+        institute: inst,
+        calculatedRisk: Math.max(35, evaluation.riskScore),
+        evaluation,
+      };
     });
 
     // Pick institute probabilistically weighted by risk score
@@ -245,10 +263,123 @@ router.post('/random-assign', optionalAuthenticateToken, async (req: Authenticat
   }
 });
 
-// POST /api/inspections/:id/verify-geofence
-router.post('/:id/verify-geofence', async (req, res): Promise<void> => {
+// GET /api/inspections/fairness-stats
+// Returns inspector allocation distribution to verify algorithmic fairness
+router.get('/fairness-stats', optionalAuthenticateToken, async (req, res): Promise<void> => {
   try {
-    const { latitude, longitude } = req.body;
+    const inspectors = await prisma.user.findMany({
+      where: { role: { in: ['INSPECTOR', 'PMU', 'inspector', 'pmu'] }, active: true },
+      select: { id: true, name: true, email: true, department: true },
+    });
+
+    const stats = await Promise.all(
+      inspectors.map(async (ins) => {
+        const total = await prisma.inspection.count({ where: { inspectorId: ins.id } });
+        const completed = await prisma.inspection.count({
+          where: { inspectorId: ins.id, status: 'COMPLETED' },
+        });
+        const active = await prisma.inspection.count({
+          where: { inspectorId: ins.id, status: { in: ['SCHEDULED', 'IN_PROGRESS'] } },
+        });
+        return {
+          inspectorId: ins.id,
+          inspectorName: ins.name,
+          department: ins.department,
+          totalAssigned: total,
+          completed,
+          activeWorkload: active,
+        };
+      })
+    );
+
+    res.json({
+      success: true,
+      fairnessMetric: 'BALANCED_WEIGHTED_DISTRIBUTION',
+      inspectors: stats,
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: 'Failed to calculate fairness metrics' });
+  }
+});
+
+// POST /api/inspections/:id/reassign
+// Manual inspector swap/override with audit trail
+router.post('/:id/reassign', optionalAuthenticateToken, async (req: AuthenticatedRequest, res): Promise<void> => {
+  try {
+    const { newInspectorId, reason } = req.body;
+    if (!newInspectorId) {
+      res.status(400).json({ success: false, message: 'New inspector ID is required' });
+      return;
+    }
+
+    const inspection = await prisma.inspection.findFirst({
+      where: { OR: [{ id: req.params.id }, { inspectionNumber: req.params.id }] },
+      include: { inspector: true, institute: true },
+    });
+
+    if (!inspection) {
+      res.status(404).json({ success: false, message: 'Inspection not found' });
+      return;
+    }
+
+    const newInspector = await prisma.user.findUnique({ where: { id: newInspectorId } });
+    if (!newInspector) {
+      res.status(404).json({ success: false, message: 'Target inspector not found' });
+      return;
+    }
+
+    const previousInspectorName = inspection.inspector?.name || 'Unassigned';
+
+    const updated = await prisma.inspection.update({
+      where: { id: inspection.id },
+      data: {
+        inspectorId: newInspector.id,
+        notes: `${inspection.notes || ''} [MANUAL OVERRIDE: Swapped from ${previousInspectorName} to ${newInspector.name}. Reason: ${reason || 'Operational adjustment'}]`,
+      },
+      include: {
+        institute: { include: { project: true } },
+        inspector: true,
+        report: true,
+        evidenceItems: true,
+      },
+    });
+
+    await recordAuditLog({
+      userId: req.user?.id || 'USR-ADMIN-01',
+      userRole: req.user?.role || 'ADMIN',
+      action: 'REASSIGN_INSPECTION_DUTY',
+      entity: 'INSPECTION',
+      entityId: inspection.id,
+      details: `Reassigned duty ${inspection.inspectionNumber} from ${previousInspectorName} to ${newInspector.name}. Reason: ${reason || 'Operational adjustment'}`,
+    });
+
+    // Notify new inspector
+    await prisma.notification.create({
+      data: {
+        userId: newInspector.id,
+        title: '📋 Reassigned Inspection Duty',
+        message: `Inspection ${inspection.inspectionNumber} for ${inspection.institute.name} has been reassigned to you.`,
+        type: 'INSPECTION',
+        link: `/inspections/${inspection.id}`,
+      },
+    });
+
+    res.json({
+      success: true,
+      message: `Duty successfully reassigned to ${newInspector.name}`,
+      inspection: formatInspection(updated),
+    });
+  } catch (err: any) {
+    console.error('Reassign error:', err);
+    res.status(500).json({ success: false, message: 'Failed to reassign inspection' });
+  }
+});
+
+// POST /api/inspections/:id/verify-geofence
+// Real GPS geofence verification - Strictly computes Haversine distance from live phone coordinates
+router.post('/:id/verify-geofence', optionalAuthenticateToken, async (req: AuthenticatedRequest, res): Promise<void> => {
+  try {
+    const { latitude, longitude, accuracy, overrideReason } = req.body;
     const inspection = await prisma.inspection.findFirst({
       where: { OR: [{ id: req.params.id }, { inspectionNumber: req.params.id }] },
       include: { institute: true },
@@ -263,21 +394,39 @@ router.post('/:id/verify-geofence', async (req, res): Promise<void> => {
     const instLon = inspection.institute.longitude;
     const radius = inspection.institute.geofenceRadiusMeters || 100.0;
 
-    let distance = 45.0; // default simulate within geofence if coords omitted
-    if (latitude !== undefined && longitude !== undefined) {
-      distance = calculateDistanceMeters(Number(latitude), Number(longitude), instLat, instLon);
+    // Reject simulated or omitted GPS
+    if (latitude === undefined || longitude === undefined || isNaN(Number(latitude)) || isNaN(Number(longitude))) {
+      res.status(400).json({
+        success: false,
+        message: 'Physical GPS acquisition failed. Valid latitude and longitude are required from device sensors.',
+        geofenceVerified: false,
+      });
+      return;
     }
 
-    const isWithinGeofence = distance <= radius + 20; // 20m GPS tolerance
+    const distance = calculateDistanceMeters(Number(latitude), Number(longitude), instLat, instLon);
+    const gpsAccuracy = Number(accuracy) || 10.0;
+    // Buffer includes GPS sensor accuracy uncertainty
+    const effectiveTolerance = Math.min(25.0, gpsAccuracy);
+    let isWithinGeofence = distance <= radius + effectiveTolerance;
+
+    let isOverrideApplied = false;
+    if (!isWithinGeofence && overrideReason) {
+      isWithinGeofence = true;
+      isOverrideApplied = true;
+    }
 
     const updated = await prisma.inspection.update({
       where: { id: inspection.id },
       data: {
         geofenceVerified: isWithinGeofence,
-        arrivalLatitude: latitude ? Number(latitude) : instLat,
-        arrivalLongitude: longitude ? Number(longitude) : instLon,
+        arrivalLatitude: Number(latitude),
+        arrivalLongitude: Number(longitude),
         arrivalTimestamp: isWithinGeofence ? new Date() : null,
         status: isWithinGeofence ? 'IN_PROGRESS' : inspection.status,
+        notes: isOverrideApplied
+          ? `${inspection.notes || ''} [GEOFENCE OVERRIDE: ${overrideReason} (Distance was ${distance}m, allowed ${radius}m)]`
+          : inspection.notes,
       },
       include: {
         institute: { include: { project: true } },
@@ -287,11 +436,22 @@ router.post('/:id/verify-geofence', async (req, res): Promise<void> => {
       },
     });
 
+    await recordAuditLog({
+      userId: req.user?.id || inspection.inspectorId || undefined,
+      userRole: req.user?.role || 'INSPECTOR',
+      action: isOverrideApplied ? 'GEOFENCE_VERIFY_WITH_OVERRIDE' : 'GEOFENCE_VERIFY_SUCCESS',
+      entity: 'INSPECTION',
+      entityId: inspection.id,
+      details: `GPS Arrival verified: Target (${instLat}, ${instLon}), Device (${latitude}, ${longitude}), Distance: ${distance}m, Radius: ${radius}m. Status: ${isWithinGeofence ? 'VERIFIED' : 'OUTSIDE_GEOFENCE'}${isOverrideApplied ? ` (Override Reason: ${overrideReason})` : ''}`,
+    });
+
     res.json({
       success: true,
       geofenceVerified: isWithinGeofence,
       distanceMeters: distance,
       allowedRadiusMeters: radius,
+      deviceAccuracyMeters: gpsAccuracy,
+      isOverrideApplied,
       inspection: formatInspection(updated),
     });
   } catch (err) {

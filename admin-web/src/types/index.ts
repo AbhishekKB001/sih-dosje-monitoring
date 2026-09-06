@@ -72,6 +72,11 @@ export interface CameraFeed {
   district: string;
   status: 'online' | 'offline' | 'degraded';
   lastActiveAt: string;
+  streamUrl?: string;
+  cameraCode?: string;
+  cameraId?: string;
+  ptz?: { pan: number; tilt: number; zoom: number };
+  recording?: boolean;
 }
 
 export type AlertSeverity = 'low' | 'medium' | 'high' | 'critical';

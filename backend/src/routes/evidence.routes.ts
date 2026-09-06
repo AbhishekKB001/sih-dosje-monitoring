@@ -27,11 +27,11 @@ router.get('/:id', optionalAuthenticateToken, async (req, res): Promise<void> =>
       return;
     }
 
-    // If request accepts image directly, send file if exists
-    if (req.headers.accept?.includes('image/')) {
+    // If request accepts media directly, send file if exists
+    if (req.headers.accept?.includes('image/') || req.headers.accept?.includes('video/')) {
       const filePath = path.resolve(__dirname, '../../', item.fileUrl.replace(/^\//, ''));
       if (fs.existsSync(filePath)) {
-        res.setHeader('Content-Type', 'image/jpeg');
+        res.setHeader('Content-Type', item.fileType === 'VIDEO' ? 'video/mp4' : 'image/jpeg');
         fs.createReadStream(filePath).pipe(res);
         return;
       }
@@ -112,12 +112,15 @@ router.post('/', async (req, res): Promise<void> => {
     const { inspectionId, fileUrl, fileType, sha256Hash, latitude, longitude, rawBase64 } = req.body;
 
     let hash = sha256Hash;
-    let targetUrl = fileUrl || '/data/evidence/evidence_demo.jpg';
+    const isVideo = (fileType || '').toUpperCase() === 'VIDEO';
+    let targetUrl = fileUrl || (isVideo ? '/data/evidence/evidence_demo.mp4' : '/data/evidence/evidence_demo.jpg');
 
     if (rawBase64) {
-      const buffer = Buffer.from(rawBase64.replace(/^data:image\/\w+;base64,/, ''), 'base64');
+      const cleanBase64 = rawBase64.replace(/^data:(image|video)\/\w+;base64,/, '');
+      const buffer = Buffer.from(cleanBase64, 'base64');
       hash = crypto.createHash('sha256').update(buffer).digest('hex');
-      const filename = `evd_${Date.now()}_${hash.slice(0, 8)}.jpg`;
+      const ext = isVideo ? 'mp4' : 'jpg';
+      const filename = `evd_${Date.now()}_${hash.slice(0, 8)}.${ext}`;
       const dir = path.resolve(__dirname, '../../data/evidence');
       fs.mkdirSync(dir, { recursive: true });
       fs.writeFileSync(path.join(dir, filename), buffer);
